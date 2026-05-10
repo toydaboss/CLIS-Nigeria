@@ -1,4 +1,4 @@
-import { Request, Response } from "express";
+import { NextFunction, Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { adminOnly, auth } from "../../middleware/auth";
@@ -27,7 +27,7 @@ function makeToken(
 }
 
 describe("auth middleware", () => {
-  let next: ReturnType<typeof vi.fn>;
+  let next: NextFunction;
 
   beforeEach(() => {
     next = vi.fn();
@@ -99,7 +99,7 @@ describe("auth middleware", () => {
 });
 
 describe("adminOnly middleware", () => {
-  let next: ReturnType<typeof vi.fn>;
+  let next: NextFunction;
 
   beforeEach(() => {
     next = vi.fn();
