@@ -44,7 +44,7 @@ export function LookupPage() {
 
   return (
     <AdminLayout active="Verification Lookup">
-      <div style={{ padding: "32px 36px", maxWidth: 980, margin: "0 auto" }}>
+      <div className="page-pad" style={{ maxWidth: 980, margin: "0 auto" }}>
         <div style={{ marginBottom: 20 }}>
           <div
             className="t-micro"
@@ -131,7 +131,7 @@ export function LookupPage() {
                   {t.title_ref}
                 </span>
               </div>
-              <div style={{ display: "flex", gap: 8 }}>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 <button className="btn btn-secondary btn-sm">
                   View history
                 </button>
@@ -153,14 +153,7 @@ export function LookupPage() {
             </div>
 
             {/* Fields */}
-            <div
-              style={{
-                padding: 24,
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr 1fr",
-                gap: 20,
-              }}
-            >
+            <div className="grid-3" style={{ padding: 24 }}>
               <FieldRow
                 label="Jurisdiction"
                 value={`${t.jurisdiction_state} Registry`}

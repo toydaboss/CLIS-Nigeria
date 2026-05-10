@@ -42,7 +42,7 @@ function Step1({
 }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+      <div className="grid-2">
         <div className="field">
           <label className="field-label">
             Owner NIN{" "}
@@ -257,7 +257,7 @@ function Step2({
           only.
         </div>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+      <div className="grid-2">
         <div className="field">
           <label className="field-label">Latitude</label>
           <input
@@ -276,9 +276,7 @@ function Step2({
         </div>
       </div>
       <MapPlaceholder lat={data.latitude} lng={data.longitude} />
-      <div
-        style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 20 }}
-      >
+      <div className="grid-2">
         <div className="field">
           <label className="field-label">
             Document Reference (physical archive ID)
@@ -648,14 +646,16 @@ export function RegisterTitlePage() {
 
   return (
     <AdminLayout active="Register Title">
-      <div style={{ padding: "32px 36px", maxWidth: 880, margin: "0 auto" }}>
+      <div className="page-pad" style={{ maxWidth: 880, margin: "0 auto" }}>
         {/* Header */}
         <div
           style={{
             display: "flex",
             justifyContent: "space-between",
-            alignItems: "center",
+            alignItems: "flex-start",
             marginBottom: 28,
+            flexWrap: "wrap",
+            gap: 12,
           }}
         >
           <div>

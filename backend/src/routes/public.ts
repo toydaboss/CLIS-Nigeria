@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { pool } from "../db";
+import { Title } from "../db/models/Title";
 
 const router = Router();
 
@@ -8,7 +8,6 @@ router.get("/titles/:ref", async (req, res) => {
   const { ref } = req.params;
   const clean = ref.trim().toUpperCase();
 
-  // Basic format validation: STATE-YEAR-NNNNN
   if (!/^[A-Z]+(?:\s+[A-Z]+)*-\d{4}-\d{5}$/.test(clean)) {
     return res
       .status(400)
@@ -18,24 +17,19 @@ router.get("/titles/:ref", async (req, res) => {
   }
 
   try {
-    const { rows } = await pool.query(
-      `SELECT title_ref, jurisdiction_state, registration_date, status, dispute_case, last_modified
-       FROM titles WHERE title_ref = $1`,
-      [clean],
-    );
+    const title = await Title.findOne({ titleRef: clean }).lean();
 
-    if (rows.length === 0) {
+    if (!title) {
       return res.json({ found: false, searched: clean });
     }
 
-    const t = rows[0];
     return res.json({
       found: true,
-      titleRef: t.title_ref,
-      jurisdictionState: t.jurisdiction_state,
-      registrationDate: t.registration_date,
-      status: t.status,
-      disputeCase: t.dispute_case || null,
+      titleRef: title.titleRef,
+      jurisdictionState: title.jurisdictionState,
+      registrationDate: title.registrationDate,
+      status: title.status,
+      disputeCase: title.disputeCase || null,
       lastVerified: new Date().toISOString(),
     });
   } catch (err) {

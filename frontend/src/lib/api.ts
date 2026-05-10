@@ -48,7 +48,7 @@ export async function loginMfa(tempToken: string, code: string) {
   return data as {
     accessToken: string;
     user: {
-      id: number;
+      id: string;
       name: string;
       email: string;
       role: "registrar" | "admin";
@@ -129,6 +129,74 @@ export async function flagDispute(ref: string, disputeCase: string) {
   return data as { ok: boolean };
 }
 
+// ── Users ─────────────────────────────────────────────────
+export interface AdminUser {
+  _id: string;
+  email: string;
+  name: string;
+  role: "registrar" | "admin";
+  jurisdictionState: string | null;
+  userCode: string;
+  createdAt: string;
+}
+
+export async function fetchUsers() {
+  const { data } = await api.get("/admin/users");
+  return data as AdminUser[];
+}
+
+export async function createUser(payload: {
+  email: string;
+  name: string;
+  role: string;
+  jurisdictionState?: string;
+  password: string;
+}) {
+  const { data } = await api.post("/admin/users", payload);
+  return data as { user: AdminUser; totpSecret: string; totpUri: string };
+}
+
+export async function updateUserRole(
+  id: string,
+  role: string,
+  jurisdictionState?: string,
+) {
+  const { data } = await api.patch(`/admin/users/${id}/role`, {
+    role,
+    jurisdictionState,
+  });
+  return data as { ok: boolean };
+}
+
+export async function deleteUser(id: string) {
+  const { data } = await api.delete(`/admin/users/${id}`);
+  return data as { ok: boolean };
+}
+
+// ── Jurisdictions ──────────────────────────────────────────
+export interface JurisdictionStat {
+  state: string;
+  totalTitles: number;
+  registeredTitles: number;
+  disputedTitles: number;
+  pendingTitles: number;
+  registrars: number;
+  lastActivity: string;
+}
+
+export async function fetchJurisdictions() {
+  const { data } = await api.get("/admin/jurisdictions");
+  return data as {
+    jurisdictions: JurisdictionStat[];
+    totals: {
+      states: number;
+      titles: number;
+      disputes: number;
+      registrars: number;
+    };
+  };
+}
+
 // ── Audit ─────────────────────────────────────────────────
 export async function fetchAuditLog(
   params: {
@@ -151,6 +219,31 @@ export async function fetchAuditLog(
       record_ref: string;
       before_state: object | null;
       after_state: object;
+    }>;
+    total: number;
+    limit: number;
+    offset: number;
+  };
+}
+
+export async function fetchTitles(
+  params: {
+    status?: string;
+    state?: string;
+    offset?: number;
+    limit?: number;
+  } = {},
+) {
+  const { data } = await api.get("/admin/titles", { params });
+  return data as {
+    titles: Array<{
+      titleRef: string;
+      jurisdictionState: string;
+      lga: string;
+      registrationDate: string;
+      status: string;
+      registeredBy: string;
+      disputeCase: string | null;
     }>;
     total: number;
     limit: number;

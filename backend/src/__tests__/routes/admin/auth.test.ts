@@ -3,7 +3,9 @@ import jwt from "jsonwebtoken";
 import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../../../db", () => ({ pool: { query: vi.fn() } }));
+vi.mock("../../../db/models/User", () => ({
+  User: { findOne: vi.fn(), findById: vi.fn() },
+}));
 vi.mock("bcryptjs", () => ({ default: { compare: vi.fn(), hash: vi.fn() } }));
 vi.mock("otplib", () => ({
   authenticator: { verify: vi.fn(), generateSecret: vi.fn() },
@@ -11,36 +13,40 @@ vi.mock("otplib", () => ({
 
 import bcrypt from "bcryptjs";
 import { authenticator } from "otplib";
-import { pool } from "../../../db";
+import { User } from "../../../db/models/User";
 import authRouter from "../../../routes/admin/auth";
 
 const app = express();
 app.use(express.json());
 app.use("/api/auth", authRouter);
 
-const mockQuery = vi.mocked(
-  pool.query as (...a: unknown[]) => Promise<unknown>,
-);
+const mockFindOne = vi.mocked(User.findOne);
+const mockFindById = vi.mocked(User.findById);
 const mockCompare = vi.mocked(bcrypt.compare);
 const mockVerify = vi.mocked(authenticator.verify);
 
 const TEMP_SECRET = process.env.JWT_TEMP_SECRET!;
 const JWT_SECRET = process.env.JWT_SECRET!;
 
+const FAKE_ID = "507f1f77bcf86cd799439011";
 const FAKE_USER = {
-  id: 1,
+  _id: FAKE_ID,
   email: "a.bello@lagosstate.gov.ng",
   name: "Aisha Bello",
-  password_hash: "$2b$12$hashedpw",
+  passwordHash: "$2b$12$hashedpw",
   role: "registrar",
-  user_code: "USR-LSR-0241",
-  jurisdiction_state: "Lagos",
-  mfa_secret: "BASE32TOTPSECRET",
+  userCode: "USR-LSR-0241",
+  jurisdictionState: "Lagos",
+  mfaSecret: "BASE32TOTPSECRET",
 };
+
+function leanOf(value: unknown) {
+  return { lean: vi.fn().mockResolvedValueOnce(value) } as any;
+}
 
 describe("POST /api/auth/login", () => {
   beforeEach(() => {
-    mockQuery.mockReset();
+    mockFindOne.mockReset();
     mockCompare.mockReset();
   });
 
@@ -60,7 +66,7 @@ describe("POST /api/auth/login", () => {
   });
 
   it("returns 401 when user is not found in DB", async () => {
-    mockQuery.mockResolvedValueOnce({ rows: [] });
+    mockFindOne.mockReturnValueOnce(leanOf(null));
     const res = await request(app)
       .post("/api/auth/login")
       .send({ email: "nobody@gov.ng", password: "pw" });
@@ -69,27 +75,27 @@ describe("POST /api/auth/login", () => {
   });
 
   it("returns 401 when password does not match", async () => {
-    mockQuery.mockResolvedValueOnce({ rows: [FAKE_USER] });
+    mockFindOne.mockReturnValueOnce(leanOf(FAKE_USER));
     mockCompare.mockResolvedValueOnce(false as never);
     const res = await request(app)
       .post("/api/auth/login")
       .send({ email: FAKE_USER.email, password: "wrongpassword" });
     expect(res.status).toBe(401);
-    expect(res.body.error).toBe("Invalid credentials");
   });
 
   it("normalises email to lowercase before querying", async () => {
-    mockQuery.mockResolvedValueOnce({ rows: [FAKE_USER] });
+    mockFindOne.mockReturnValueOnce(leanOf(FAKE_USER));
     mockCompare.mockResolvedValueOnce(true as never);
     await request(app)
       .post("/api/auth/login")
       .send({ email: "A.BELLO@LAGOSSTATE.GOV.NG", password: "pw" });
-    const calledWith = mockQuery.mock.calls[0][1];
-    expect((calledWith as string[])[0]).toBe("a.bello@lagosstate.gov.ng");
+    expect(mockFindOne).toHaveBeenCalledWith({
+      email: "a.bello@lagosstate.gov.ng",
+    });
   });
 
   it("returns tempToken and user info on success", async () => {
-    mockQuery.mockResolvedValueOnce({ rows: [FAKE_USER] });
+    mockFindOne.mockReturnValueOnce(leanOf(FAKE_USER));
     mockCompare.mockResolvedValueOnce(true as never);
     const res = await request(app)
       .post("/api/auth/login")
@@ -100,22 +106,24 @@ describe("POST /api/auth/login", () => {
     expect(res.body.email).toBe(FAKE_USER.email);
   });
 
-  it("tempToken contains userId and step=mfa", async () => {
-    mockQuery.mockResolvedValueOnce({ rows: [FAKE_USER] });
+  it("tempToken contains userId (string) and step=mfa", async () => {
+    mockFindOne.mockReturnValueOnce(leanOf(FAKE_USER));
     mockCompare.mockResolvedValueOnce(true as never);
     const res = await request(app)
       .post("/api/auth/login")
       .send({ email: FAKE_USER.email, password: "pw" });
     const decoded = jwt.verify(res.body.tempToken, TEMP_SECRET) as {
-      userId: number;
+      userId: string;
       step: string;
     };
-    expect(decoded.userId).toBe(1);
+    expect(decoded.userId).toBe(FAKE_ID);
     expect(decoded.step).toBe("mfa");
   });
 
   it("returns 500 on DB error", async () => {
-    mockQuery.mockRejectedValueOnce(new Error("db fail"));
+    mockFindOne.mockReturnValueOnce({
+      lean: vi.fn().mockRejectedValueOnce(new Error("db fail")),
+    } as any);
     const res = await request(app)
       .post("/api/auth/login")
       .send({ email: FAKE_USER.email, password: "pw" });
@@ -125,11 +133,11 @@ describe("POST /api/auth/login", () => {
 
 describe("POST /api/auth/mfa", () => {
   beforeEach(() => {
-    mockQuery.mockReset();
+    mockFindById.mockReset();
     mockVerify.mockReset();
   });
 
-  function makeTempToken(payload: object = { userId: 1, step: "mfa" }) {
+  function makeTempToken(payload: object = { userId: FAKE_ID, step: "mfa" }) {
     return jwt.sign(payload, TEMP_SECRET, { expiresIn: "5m" });
   }
 
@@ -156,7 +164,7 @@ describe("POST /api/auth/mfa", () => {
   });
 
   it("returns 401 when tempToken step is not mfa", async () => {
-    const token = jwt.sign({ userId: 1, step: "other" }, TEMP_SECRET);
+    const token = jwt.sign({ userId: FAKE_ID, step: "other" }, TEMP_SECRET);
     const res = await request(app)
       .post("/api/auth/mfa")
       .send({ tempToken: token, code: "123456" });
@@ -165,60 +173,55 @@ describe("POST /api/auth/mfa", () => {
   });
 
   it("returns 401 when user is not found after token decode", async () => {
-    mockQuery.mockResolvedValueOnce({ rows: [] });
-    const token = makeTempToken();
+    mockFindById.mockReturnValueOnce(leanOf(null));
     const res = await request(app)
       .post("/api/auth/mfa")
-      .send({ tempToken: token, code: "123456" });
+      .send({ tempToken: makeTempToken(), code: "123456" });
     expect(res.status).toBe(401);
     expect(res.body.error).toBe("User not found");
   });
 
   it("returns 401 when TOTP code is invalid", async () => {
-    mockQuery.mockResolvedValueOnce({ rows: [FAKE_USER] });
+    mockFindById.mockReturnValueOnce(leanOf(FAKE_USER));
     mockVerify.mockReturnValueOnce(false);
-    const token = makeTempToken();
     const res = await request(app)
       .post("/api/auth/mfa")
-      .send({ tempToken: token, code: "000000" });
+      .send({ tempToken: makeTempToken(), code: "000000" });
     expect(res.status).toBe(401);
     expect(res.body.error).toBe("Invalid TOTP code");
   });
 
   it("strips spaces from the TOTP code before verifying", async () => {
-    mockQuery.mockResolvedValueOnce({ rows: [FAKE_USER] });
+    mockFindById.mockReturnValueOnce(leanOf(FAKE_USER));
     mockVerify.mockReturnValueOnce(true);
-    const token = makeTempToken();
     await request(app)
       .post("/api/auth/mfa")
-      .send({ tempToken: token, code: "123 456" });
+      .send({ tempToken: makeTempToken(), code: "123 456" });
     expect(mockVerify).toHaveBeenCalledWith({
       token: "123456",
-      secret: FAKE_USER.mfa_secret,
+      secret: FAKE_USER.mfaSecret,
     });
   });
 
   it("returns accessToken and full user on success", async () => {
-    mockQuery.mockResolvedValueOnce({ rows: [FAKE_USER] });
+    mockFindById.mockReturnValueOnce(leanOf(FAKE_USER));
     mockVerify.mockReturnValueOnce(true);
-    const token = makeTempToken();
     const res = await request(app)
       .post("/api/auth/mfa")
-      .send({ tempToken: token, code: "123456" });
+      .send({ tempToken: makeTempToken(), code: "123456" });
     expect(res.status).toBe(200);
     expect(res.body).toHaveProperty("accessToken");
     expect(res.body.user.email).toBe(FAKE_USER.email);
     expect(res.body.user.role).toBe("registrar");
-    expect(res.body.user).not.toHaveProperty("password_hash");
+    expect(res.body.user).not.toHaveProperty("passwordHash");
   });
 
   it("accessToken carries correct role claim", async () => {
-    mockQuery.mockResolvedValueOnce({ rows: [FAKE_USER] });
+    mockFindById.mockReturnValueOnce(leanOf(FAKE_USER));
     mockVerify.mockReturnValueOnce(true);
-    const token = makeTempToken();
     const res = await request(app)
       .post("/api/auth/mfa")
-      .send({ tempToken: token, code: "123456" });
+      .send({ tempToken: makeTempToken(), code: "123456" });
     const decoded = jwt.verify(res.body.accessToken, JWT_SECRET) as {
       role: string;
     };

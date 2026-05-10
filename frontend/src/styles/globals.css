@@ -797,3 +797,196 @@ body {
   height: 1px;
   background: var(--c-ink-200);
 }
+
+/* ── Responsive layout utilities ─────────────────────────── */
+.page-pad {
+  padding: 32px 36px;
+}
+
+.table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Collapsible grids */
+.grid-4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+.grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+}
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+}
+
+.grid-dash {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr;
+  gap: 20px;
+}
+
+/* Hamburger — hidden on desktop */
+.topbar-hamburger {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--c-ink-700);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.topbar-hamburger:hover {
+  background: var(--c-ink-50);
+}
+
+/* Sidebar overlay — hidden until triggered */
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 199;
+}
+
+/* ── Tablet (≤ 1024px): collapse 4-col → 2-col ───────────── */
+@media (max-width: 1024px) {
+  .grid-4 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .grid-dash {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Mobile (≤ 768px): sidebar drawer + layout adjustments ── */
+@media (max-width: 768px) {
+
+  /* Sidebar becomes a fixed off-canvas drawer */
+  .sidebar {
+    position: fixed;
+    left: -260px;
+    top: 0;
+    bottom: 0;
+    z-index: 200;
+    transition: left 0.25s ease;
+    box-shadow: none;
+  }
+
+  .sidebar.sidebar-open {
+    left: 0;
+    box-shadow: var(--sh-lg);
+  }
+
+  .sidebar-overlay.sidebar-open {
+    display: block;
+  }
+
+  /* Topbar */
+  .topbar {
+    padding: 0 16px;
+  }
+
+  .topbar-hamburger {
+    display: flex;
+  }
+
+  .topbar-search {
+    display: none;
+  }
+
+  /* Pages */
+  .page-pad {
+    padding: 20px 16px;
+  }
+
+  /* Grids */
+  .grid-3 {
+    grid-template-columns: 1fr;
+  }
+
+  .grid-2 {
+    grid-template-columns: 1fr;
+  }
+
+  .grid-dash {
+    grid-template-columns: 1fr;
+  }
+
+  /* Typography scale down */
+  .t-display {
+    font-size: 32px;
+  }
+
+  .t-h1 {
+    font-size: 24px;
+  }
+
+  /* Hide jurisdiction in role chip to save space */
+  .role-chip-divider,
+  .role-chip-loc {
+    display: none;
+  }
+}
+
+/* ── Small mobile (≤ 480px): further tightening ─────────── */
+@media (max-width: 480px) {
+  .grid-4 {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .card-pad-lg {
+    padding: var(--s-5);
+  }
+
+  /* VerifyPage */
+  .verify-hero {
+    padding: 36px 20px 32px !important;
+  }
+
+  .verify-section {
+    padding: 0 20px 48px !important;
+  }
+
+  .verify-how {
+    padding: 40px 20px 60px !important;
+  }
+
+  .verify-footer {
+    padding: 32px 20px 24px !important;
+  }
+
+  .verify-nav {
+    padding: 16px 20px !important;
+  }
+
+  .verify-govbar {
+    padding: 8px 20px !important;
+  }
+
+  .verify-footer-cols {
+    display: none;
+  }
+
+  .verify-nav-hide {
+    display: none;
+  }
+
+  /* Collapse inner result-card grids */
+  .result-grid {
+    grid-template-columns: 1fr !important;
+  }
+}

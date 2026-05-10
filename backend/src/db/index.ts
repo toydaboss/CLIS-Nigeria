@@ -1,15 +1,14 @@
 import dotenv from "dotenv";
-import { Pool } from "pg";
+import mongoose from "mongoose";
 
 dotenv.config();
 
-console.log({ db: process.env.DATABASE_URL });
-export const pool = new Pool({
-  connectionString:
-    process.env.DATABASE_URL ||
-    "postgresql://clis_nigeria:191413@localhost:5432/postgres",
-});
+export async function connectDB(): Promise<void> {
+  const uri =
+    process.env.MONGODB_URI ||
+    "mongodb://mongo:mongo@127.0.0.1:27017/clis_nigeria?authSource=admin";
+  await mongoose.connect(uri);
+  console.log("Connected to MongoDB");
+}
 
-pool.on("error", (err) => {
-  console.error("Unexpected database error:", err);
-});
+export { mongoose };

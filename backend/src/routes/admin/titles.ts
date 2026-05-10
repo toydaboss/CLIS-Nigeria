@@ -1,19 +1,17 @@
 import { Router } from "express";
-import { pool } from "../../db";
+import { AuditLog } from "../../db/models/AuditLog";
+import { Title } from "../../db/models/Title";
 import { auth } from "../../middleware/auth";
 
 const router = Router();
 
-// GET /api/admin/titles/:ref — admin internal lookup (full metadata)
+// GET /api/admin/titles/:ref — admin internal lookup
 router.get("/:ref", auth, async (req, res) => {
   const ref = req.params.ref.toUpperCase().trim();
   try {
-    const { rows } = await pool.query(
-      `SELECT * FROM titles WHERE title_ref = $1`,
-      [ref],
-    );
-    if (rows.length === 0) return res.json({ found: false, searched: ref });
-    return res.json({ found: true, title: rows[0] });
+    const title = await Title.findOne({ titleRef: ref }).lean();
+    if (!title) return res.json({ found: false, searched: ref });
+    return res.json({ found: true, title });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: "Internal server error" });
@@ -39,67 +37,42 @@ router.post("/", auth, async (req, res) => {
   }
 
   try {
-    // Check for overlap (naïve proximity check — within ~0.0002° ≈ 20m)
-    const { rows: nearby } = await pool.query(
-      `
-      SELECT title_ref FROM titles
-      WHERE ABS(latitude - $1) < 0.0002 AND ABS(longitude - $2) < 0.0002
-        AND title_ref != $3
-      LIMIT 3
-    `,
-      [latitude, longitude, titleRef],
-    );
+    const nearby = await Title.find({
+      latitude: { $gt: latitude - 0.0002, $lt: latitude + 0.0002 },
+      longitude: { $gt: longitude - 0.0002, $lt: longitude + 0.0002 },
+      titleRef: { $ne: titleRef },
+    })
+      .select("titleRef")
+      .limit(3)
+      .lean();
 
-    const client = await pool.connect();
-    try {
-      await client.query("BEGIN");
+    const title = await Title.create({
+      titleRef,
+      ownerNinLast4,
+      ownerNameMasked,
+      jurisdictionState,
+      lga,
+      latitude,
+      longitude,
+      documentRef,
+      registrationDate: new Date(registrationDate),
+      registeredBy: req.user!.userCode,
+    });
 
-      const { rows } = await client.query(
-        `
-        INSERT INTO titles
-          (title_ref, owner_nin_last4, owner_name_masked, jurisdiction_state, lga,
-           latitude, longitude, document_ref, registration_date, status, registered_by)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'registered',$10)
-        RETURNING *
-      `,
-        [
-          titleRef,
-          ownerNinLast4,
-          ownerNameMasked,
-          jurisdictionState,
-          lga,
-          latitude,
-          longitude,
-          documentRef,
-          registrationDate,
-          req.user!.userCode,
-        ],
-      );
+    await AuditLog.create({
+      userCode: req.user!.userCode,
+      operation: "INSERT",
+      recordRef: titleRef,
+      beforeState: null,
+      afterState: { status: "registered" },
+    });
 
-      await client.query(
-        `
-        INSERT INTO audit_log (user_code, operation, record_ref, before_state, after_state)
-        VALUES ($1, 'INSERT', $2, NULL, $3)
-      `,
-        [
-          req.user!.userCode,
-          titleRef,
-          JSON.stringify({ status: "registered" }),
-        ],
-      );
-
-      await client.query("COMMIT");
-      return res
-        .status(201)
-        .json({ title: rows[0], nearby: nearby.map((r) => r.title_ref) });
-    } catch (err) {
-      await client.query("ROLLBACK");
-      throw err;
-    } finally {
-      client.release();
-    }
+    return res.status(201).json({
+      title,
+      nearby: nearby.map((t) => t.titleRef),
+    });
   } catch (err: any) {
-    if (err.code === "23505") {
+    if (err.code === 11000) {
       return res.status(409).json({ error: "Title reference already exists" });
     }
     console.error(err);
@@ -112,41 +85,30 @@ router.patch("/:ref/dispute", auth, async (req, res) => {
   const ref = req.params.ref.toUpperCase().trim();
   const { disputeCase } = req.body;
 
-  const client = await pool.connect();
   try {
-    await client.query("BEGIN");
-    const { rows: before } = await client.query(
-      "SELECT status, dispute_case FROM titles WHERE title_ref = $1",
-      [ref],
-    );
-    if (before.length === 0)
-      return res.status(404).json({ error: "Title not found" });
+    const before = await Title.findOne(
+      { titleRef: ref },
+      "status disputeCase",
+    ).lean();
+    if (!before) return res.status(404).json({ error: "Title not found" });
 
-    await client.query(
-      `UPDATE titles SET status='disputed', dispute_case=$1, last_modified=NOW() WHERE title_ref=$2`,
-      [disputeCase, ref],
-    );
-    await client.query(
-      `
-      INSERT INTO audit_log (user_code, operation, record_ref, before_state, after_state)
-      VALUES ($1,'FLAG_DISPUTE',$2,$3,$4)
-    `,
-      [
-        req.user!.userCode,
-        ref,
-        JSON.stringify({ disputed: false }),
-        JSON.stringify({ disputed: true, case: disputeCase }),
-      ],
+    await Title.updateOne(
+      { titleRef: ref },
+      { status: "disputed", disputeCase, lastModified: new Date() },
     );
 
-    await client.query("COMMIT");
+    await AuditLog.create({
+      userCode: req.user!.userCode,
+      operation: "FLAG_DISPUTE",
+      recordRef: ref,
+      beforeState: { disputed: false },
+      afterState: { disputed: true, case: disputeCase },
+    });
+
     return res.json({ ok: true });
   } catch (err) {
-    await client.query("ROLLBACK");
     console.error(err);
     return res.status(500).json({ error: "Internal server error" });
-  } finally {
-    client.release();
   }
 });
 
@@ -157,27 +119,23 @@ router.get("/", auth, async (req, res) => {
   const status = req.query.status as string | undefined;
   const state = req.query.state as string | undefined;
 
-  let where = "WHERE 1=1";
-  const params: (string | number)[] = [];
-  if (status) {
-    params.push(status);
-    where += ` AND status = $${params.length}`;
-  }
-  if (state) {
-    params.push(state);
-    where += ` AND jurisdiction_state ILIKE $${params.length}`;
-  }
+  const filter: Record<string, unknown> = {};
+  if (status) filter.status = status;
+  if (state) filter.jurisdictionState = new RegExp(state, "i");
 
   try {
-    const { rows } = await pool.query(
-      `SELECT title_ref, jurisdiction_state, lga, registration_date, status, registered_by
-       FROM titles ${where} ORDER BY created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
-      [...params, limit, offset],
-    );
-    const {
-      rows: [{ count }],
-    } = await pool.query(`SELECT COUNT(*) FROM titles ${where}`, params);
-    return res.json({ titles: rows, total: parseInt(count), limit, offset });
+    const [titles, total] = await Promise.all([
+      Title.find(
+        filter,
+        "titleRef jurisdictionState lga registrationDate status registeredBy disputeCase",
+      )
+        .sort({ createdAt: -1 })
+        .skip(offset)
+        .limit(limit)
+        .lean(),
+      Title.countDocuments(filter),
+    ]);
+    return res.json({ titles, total, limit, offset });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: "Internal server error" });

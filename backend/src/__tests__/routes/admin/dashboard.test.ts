@@ -3,43 +3,42 @@ import jwt from "jsonwebtoken";
 import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../../../db", () => ({ pool: { query: vi.fn() } }));
+vi.mock("../../../db/models/Title", () => ({
+  Title: { countDocuments: vi.fn(), aggregate: vi.fn() },
+}));
+vi.mock("../../../db/models/AuditLog", () => ({
+  AuditLog: { aggregate: vi.fn() },
+}));
 
-import { pool } from "../../../db";
+import { AuditLog } from "../../../db/models/AuditLog";
+import { Title } from "../../../db/models/Title";
 import dashboardRouter from "../../../routes/admin/dashboard";
 
 const app = express();
 app.use(express.json());
 app.use("/api/admin/dashboard", dashboardRouter);
 
-const mockQuery = vi.mocked(
-  pool.query as (...a: unknown[]) => Promise<unknown>,
-);
 const JWT_SECRET = process.env.JWT_SECRET!;
+const FAKE_ID = "507f1f77bcf86cd799439011";
 
 function authHeader(role: "registrar" | "admin" = "registrar") {
-  return `Bearer ${jwt.sign({ userId: 1, userCode: "USR-LSR-0241", role, jurisdictionState: "Lagos" }, JWT_SECRET)}`;
+  return `Bearer ${jwt.sign({ userId: FAKE_ID, userCode: "USR-LSR-0241", role, jurisdictionState: "Lagos" }, JWT_SECRET)}`;
 }
 
 describe("GET /api/admin/dashboard/stats", () => {
-  beforeEach(() => mockQuery.mockReset());
+  beforeEach(() => vi.mocked(Title.countDocuments).mockReset());
 
   it("returns 401 without auth", async () => {
     const res = await request(app).get("/api/admin/dashboard/stats");
     expect(res.status).toBe(401);
   });
 
-  it("returns parsed integer stats", async () => {
-    mockQuery.mockResolvedValueOnce({
-      rows: [
-        {
-          total_titles: "2400000",
-          titles_this_month: "138",
-          active_disputes: "7",
-          pending_reviews: "3",
-        },
-      ],
-    });
+  it("returns numeric stats", async () => {
+    vi.mocked(Title.countDocuments)
+      .mockResolvedValueOnce(2400000 as any)
+      .mockResolvedValueOnce(138 as any)
+      .mockResolvedValueOnce(7 as any)
+      .mockResolvedValueOnce(3 as any);
 
     const res = await request(app)
       .get("/api/admin/dashboard/stats")
@@ -53,7 +52,7 @@ describe("GET /api/admin/dashboard/stats", () => {
   });
 
   it("returns 500 on DB error", async () => {
-    mockQuery.mockRejectedValueOnce(new Error("db down"));
+    vi.mocked(Title.countDocuments).mockRejectedValueOnce(new Error("db down"));
     const res = await request(app)
       .get("/api/admin/dashboard/stats")
       .set("Authorization", authHeader());
@@ -62,26 +61,26 @@ describe("GET /api/admin/dashboard/stats", () => {
 });
 
 describe("GET /api/admin/dashboard/recent", () => {
-  beforeEach(() => mockQuery.mockReset());
+  beforeEach(() => vi.mocked(AuditLog.aggregate).mockReset());
 
   it("returns 401 without auth", async () => {
     const res = await request(app).get("/api/admin/dashboard/recent");
     expect(res.status).toBe(401);
   });
 
-  it("returns an array of recent activity rows", async () => {
-    const rows = [
+  it("returns an array of recent activity entries", async () => {
+    const entries = [
       {
         timestamp: "2026-05-06T08:00:00Z",
-        user_code: "USR-LSR-0241",
+        userCode: "USR-LSR-0241",
         operation: "INSERT",
-        record_ref: "LAGOS-2026-04193",
-        jurisdiction_state: "Lagos",
+        recordRef: "LAGOS-2026-04193",
+        jurisdictionState: "Lagos",
         lga: "Yaba",
         status: "registered",
       },
     ];
-    mockQuery.mockResolvedValueOnce({ rows });
+    vi.mocked(AuditLog.aggregate).mockResolvedValueOnce(entries as any);
     const res = await request(app)
       .get("/api/admin/dashboard/recent")
       .set("Authorization", authHeader());
@@ -91,7 +90,7 @@ describe("GET /api/admin/dashboard/recent", () => {
   });
 
   it("returns empty array when no activity", async () => {
-    mockQuery.mockResolvedValueOnce({ rows: [] });
+    vi.mocked(AuditLog.aggregate).mockResolvedValueOnce([] as any);
     const res = await request(app)
       .get("/api/admin/dashboard/recent")
       .set("Authorization", authHeader());
@@ -100,7 +99,7 @@ describe("GET /api/admin/dashboard/recent", () => {
 });
 
 describe("GET /api/admin/dashboard/chart", () => {
-  beforeEach(() => mockQuery.mockReset());
+  beforeEach(() => vi.mocked(Title.aggregate).mockReset());
 
   it("returns 401 without auth", async () => {
     const res = await request(app).get("/api/admin/dashboard/chart");
@@ -108,12 +107,10 @@ describe("GET /api/admin/dashboard/chart", () => {
   });
 
   it("returns daily counts array", async () => {
-    mockQuery.mockResolvedValueOnce({
-      rows: [
-        { day: "2026-05-01", count: "42" },
-        { day: "2026-05-02", count: "58" },
-      ],
-    });
+    vi.mocked(Title.aggregate).mockResolvedValueOnce([
+      { day: "2026-05-01", count: 42 },
+      { day: "2026-05-02", count: 58 },
+    ] as any);
     const res = await request(app)
       .get("/api/admin/dashboard/chart")
       .set("Authorization", authHeader());

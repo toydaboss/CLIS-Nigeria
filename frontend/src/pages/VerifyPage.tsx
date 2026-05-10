@@ -1,10 +1,12 @@
 import { Logo } from "@/components/Logo";
 import { StatusBadge } from "@/components/StatusBadges";
 import { verifyTitle } from "@/lib/api";
+import { useTheme } from "@/lib/theme";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { FormEvent, useState } from "react";
 
+type VerifyData = Awaited<ReturnType<typeof verifyTitle>>;
 // ── Federal flag strip ──────────────────────────────────────
 function Federal() {
   return (
@@ -45,19 +47,7 @@ function Federal() {
 }
 
 // ── Result cards ────────────────────────────────────────────
-function ResultRegistered({
-  data,
-}: {
-  data: NonNullable<ReturnType<typeof useQuery>["data"]> & {
-    searched?: string | undefined;
-    titleRef?: string | undefined;
-    jurisdictionState?: string | undefined;
-    registrationDate?: string | undefined;
-    status?: string | undefined;
-    disputeCase?: string | null | undefined;
-    lastVerified?: string | undefined;
-  };
-}) {
+function ResultRegistered({ data }: { data: VerifyData }) {
   const fmt = (d: string | undefined) =>
     d
       ? new Date(d).toLocaleDateString("en-NG", {
@@ -103,6 +93,7 @@ function ResultRegistered({
           {data.titleRef}
         </div>
         <div
+          className="result-grid"
           style={{
             display: "grid",
             gridTemplateColumns: "1fr 1fr",
@@ -451,6 +442,7 @@ const FOOTER_LINKS = [
 export function VerifyPage() {
   const [query, setQuery] = useState("");
   const [submitted, setSubmitted] = useState("");
+  const { theme, toggle } = useTheme();
 
   const { data, isFetching, isError } = useQuery({
     queryKey: ["verify", submitted],
@@ -475,6 +467,7 @@ export function VerifyPage() {
     >
       {/* Gov bar */}
       <div
+        className="verify-govbar"
         style={{
           background: "var(--c-blue-900)",
           padding: "8px 56px",
@@ -484,23 +477,6 @@ export function VerifyPage() {
         }}
       >
         <Federal />
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 16,
-            fontSize: 12,
-            color: "rgba(226,236,245,0.7)",
-          }}
-        >
-          <span>EN</span>
-          <span>·</span>
-          <span>HA</span>
-          <span>·</span>
-          <span>YO</span>
-          <span>·</span>
-          <span>IG</span>
-        </div>
       </div>
       <div className="pattern-strip" />
 
@@ -518,7 +494,7 @@ export function VerifyPage() {
         <Logo size={42} />
         <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
           <a
-            className="t-small"
+            className="t-small verify-nav-link"
             style={{
               color: "var(--c-ink-800)",
               fontWeight: 600,
@@ -529,7 +505,7 @@ export function VerifyPage() {
             Verify
           </a>
           <a
-            className="t-small"
+            className="t-small verify-nav-link verify-nav-hide"
             style={{
               color: "var(--c-ink-700)",
               textDecoration: "none",
@@ -539,7 +515,7 @@ export function VerifyPage() {
             How it works
           </a>
           <a
-            className="t-small"
+            className="t-small verify-nav-link verify-nav-hide"
             style={{
               color: "var(--c-ink-700)",
               textDecoration: "none",
@@ -549,7 +525,7 @@ export function VerifyPage() {
             About CLIS
           </a>
           <a
-            className="t-small"
+            className="t-small verify-nav-link verify-nav-hide"
             style={{
               color: "var(--c-ink-700)",
               textDecoration: "none",
@@ -558,6 +534,52 @@ export function VerifyPage() {
           >
             Help
           </a>
+          <button
+            onClick={toggle}
+            title={
+              theme === "dark" ? "Switch to light mode" : "Switch to dark mode"
+            }
+            style={{
+              background: "none",
+              border: "1px solid var(--c-ink-200)",
+              borderRadius: 8,
+              width: 36,
+              height: 36,
+              display: "grid",
+              placeItems: "center",
+              cursor: "pointer",
+              color: "var(--c-ink-700)",
+            }}
+          >
+            {theme === "dark" ? (
+              <svg
+                width="17"
+                height="17"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <circle cx="12" cy="12" r="5" />
+                <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+              </svg>
+            ) : (
+              <svg
+                width="17"
+                height="17"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />
+              </svg>
+            )}
+          </button>
           <Link to="/admin/login" className="btn btn-secondary btn-sm">
             Officials' portal →
           </Link>
@@ -566,6 +588,7 @@ export function VerifyPage() {
 
       {/* Hero */}
       <section
+        className="verify-hero"
         style={{
           padding: "72px 56px 48px",
           maxWidth: 920,
@@ -605,9 +628,14 @@ export function VerifyPage() {
 
         <form
           onSubmit={handleSubmit}
-          style={{ display: "flex", gap: 10, marginBottom: 14 }}
+          style={{
+            display: "flex",
+            gap: 10,
+            marginBottom: 14,
+            flexWrap: "wrap",
+          }}
         >
-          <div style={{ position: "relative", flex: 1 }}>
+          <div style={{ position: "relative", flex: "1 1 260px" }}>
             <svg
               width="18"
               height="18"
@@ -652,6 +680,7 @@ export function VerifyPage() {
       {/* Result */}
       {(data || isError) && (
         <section
+          className="verify-section"
           style={{
             padding: "0 56px 64px",
             maxWidth: 720,
@@ -683,6 +712,7 @@ export function VerifyPage() {
 
       {/* How it works */}
       <section
+        className="verify-how"
         style={{
           padding: "56px 56px 80px",
           background: "var(--c-ink-50)",
@@ -700,13 +730,7 @@ export function VerifyPage() {
           <h2 className="t-h1" style={{ marginBottom: 36 }}>
             Three steps to safer transactions.
           </h2>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr 1fr",
-              gap: 24,
-            }}
-          >
+          <div className="grid-3">
             {HOW_STEPS.map((s) => (
               <div
                 key={s.n}
@@ -767,6 +791,7 @@ export function VerifyPage() {
 
       {/* Footer */}
       <footer
+        className="verify-footer"
         style={{
           background: "var(--c-blue-900)",
           color: "rgba(226,236,245,0.7)",
@@ -779,6 +804,8 @@ export function VerifyPage() {
               display: "flex",
               justifyContent: "space-between",
               marginBottom: 28,
+              flexWrap: "wrap",
+              gap: 28,
             }}
           >
             <div style={{ maxWidth: 380 }}>
@@ -793,6 +820,7 @@ export function VerifyPage() {
               </div>
             </div>
             <div
+              className="verify-footer-cols"
               style={{
                 display: "grid",
                 gridTemplateColumns: "repeat(3, 160px)",

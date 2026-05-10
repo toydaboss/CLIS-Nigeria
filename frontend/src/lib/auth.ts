@@ -1,5 +1,5 @@
 export interface CurrentUser {
-  id: number;
+  id: string;
   name: string;
   email: string;
   role: "registrar" | "admin";

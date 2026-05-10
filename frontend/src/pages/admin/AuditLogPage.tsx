@@ -56,7 +56,7 @@ export function AuditLogPage() {
 
   return (
     <AdminLayout active="Audit Log">
-      <div style={{ padding: "32px 36px" }}>
+      <div className="page-pad">
         {/* Title */}
         <div
           style={{
@@ -276,144 +276,145 @@ export function AuditLogPage() {
         </div>
 
         {/* Table */}
-        <div className="card" style={{ overflow: "hidden" }}>
-          <table className="dtable">
-            <thead>
-              <tr>
-                <th style={{ width: 170 }}>Timestamp (WAT)</th>
-                <th style={{ width: 130 }}>User</th>
-                <th style={{ width: 130 }}>Operation</th>
-                <th style={{ width: 180 }}>Record</th>
-                <th>Before → After</th>
-              </tr>
-            </thead>
-            <tbody>
-              {isFetching ? (
+        <div className="card">
+          <div className="table-wrap">
+            <table className="dtable">
+              <thead>
                 <tr>
-                  <td
-                    colSpan={5}
-                    style={{
-                      textAlign: "center",
-                      padding: 32,
-                      color: "var(--c-ink-500)",
-                    }}
-                  >
-                    Loading…
-                  </td>
+                  <th style={{ width: 170 }}>Timestamp (WAT)</th>
+                  <th style={{ width: 130 }}>User</th>
+                  <th style={{ width: 130 }}>Operation</th>
+                  <th style={{ width: 180 }}>Record</th>
+                  <th>Before → After</th>
                 </tr>
-              ) : entries.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={5}
-                    style={{
-                      textAlign: "center",
-                      padding: 32,
-                      color: "var(--c-ink-500)",
-                    }}
-                  >
-                    No records match the current filters.
-                  </td>
-                </tr>
-              ) : (
-                entries.map((row) => {
-                  const { bg, color } = opColor(row.operation);
-                  const before = row.before_state
-                    ? JSON.stringify(row.before_state)
-                    : null;
-                  const after = JSON.stringify(row.after_state);
-                  return (
-                    <tr key={row.id}>
-                      <td>
-                        <span
-                          className="t-mono tabular"
-                          style={{ fontSize: 12 }}
-                        >
-                          {fmtTs(row.timestamp)}
-                        </span>
-                      </td>
-                      <td>
-                        <span
-                          className="t-mono"
-                          style={{ fontSize: 12, fontWeight: 600 }}
-                        >
-                          {row.user_code}
-                        </span>
-                      </td>
-                      <td>
-                        <span
-                          style={{
-                            fontSize: 11,
-                            padding: "2px 7px",
-                            borderRadius: 4,
-                            background: bg,
-                            color,
-                            fontFamily: "var(--f-mono)",
-                            fontWeight: 600,
-                          }}
-                        >
-                          {row.operation}
-                        </span>
-                      </td>
-                      <td>
-                        <span
-                          className="t-mono"
-                          style={{ fontSize: 12, fontWeight: 600 }}
-                        >
-                          {row.record_ref}
-                        </span>
-                      </td>
-                      <td>
-                        <div
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 8,
-                            fontFamily: "var(--f-mono)",
-                            fontSize: 11.5,
-                            color: "var(--c-ink-700)",
-                          }}
-                        >
-                          {before ? (
+              </thead>
+              <tbody>
+                {isFetching ? (
+                  <tr>
+                    <td
+                      colSpan={5}
+                      style={{
+                        textAlign: "center",
+                        padding: 32,
+                        color: "var(--c-ink-500)",
+                      }}
+                    >
+                      Loading…
+                    </td>
+                  </tr>
+                ) : entries.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={5}
+                      style={{
+                        textAlign: "center",
+                        padding: 32,
+                        color: "var(--c-ink-500)",
+                      }}
+                    >
+                      No records match the current filters.
+                    </td>
+                  </tr>
+                ) : (
+                  entries.map((row) => {
+                    const { bg, color } = opColor(row.operation);
+                    const before = row.before_state
+                      ? JSON.stringify(row.before_state)
+                      : null;
+                    const after = JSON.stringify(row.after_state);
+                    return (
+                      <tr key={row.id}>
+                        <td>
+                          <span
+                            className="t-mono tabular"
+                            style={{ fontSize: 12 }}
+                          >
+                            {fmtTs(row.timestamp)}
+                          </span>
+                        </td>
+                        <td>
+                          <span
+                            className="t-mono"
+                            style={{ fontSize: 12, fontWeight: 600 }}
+                          >
+                            {row.user_code}
+                          </span>
+                        </td>
+                        <td>
+                          <span
+                            style={{
+                              fontSize: 11,
+                              padding: "2px 7px",
+                              borderRadius: 4,
+                              background: bg,
+                              color,
+                              fontFamily: "var(--f-mono)",
+                              fontWeight: 600,
+                            }}
+                          >
+                            {row.operation}
+                          </span>
+                        </td>
+                        <td>
+                          <span
+                            className="t-mono"
+                            style={{ fontSize: 12, fontWeight: 600 }}
+                          >
+                            {row.record_ref}
+                          </span>
+                        </td>
+                        <td>
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 8,
+                              fontFamily: "var(--f-mono)",
+                              fontSize: 11.5,
+                              color: "var(--c-ink-700)",
+                            }}
+                          >
+                            {before ? (
+                              <span
+                                style={{
+                                  background: "var(--c-danger-50)",
+                                  padding: "1px 6px",
+                                  borderRadius: 3,
+                                }}
+                              >
+                                {before}
+                              </span>
+                            ) : (
+                              <span
+                                className="muted"
+                                style={{
+                                  fontStyle: "italic",
+                                  fontFamily: "var(--f-sans)",
+                                  fontSize: 12,
+                                }}
+                              >
+                                (new)
+                              </span>
+                            )}
+                            <span style={{ color: "var(--c-ink-500)" }}>→</span>
                             <span
                               style={{
-                                background: "var(--c-danger-50)",
+                                background: "var(--c-success-50)",
                                 padding: "1px 6px",
                                 borderRadius: 3,
                               }}
                             >
-                              {before}
+                              {after}
                             </span>
-                          ) : (
-                            <span
-                              className="muted"
-                              style={{
-                                fontStyle: "italic",
-                                fontFamily: "var(--f-sans)",
-                                fontSize: 12,
-                              }}
-                            >
-                              (new)
-                            </span>
-                          )}
-                          <span style={{ color: "var(--c-ink-500)" }}>→</span>
-                          <span
-                            style={{
-                              background: "var(--c-success-50)",
-                              padding: "1px 6px",
-                              borderRadius: 3,
-                            }}
-                          >
-                            {after}
-                          </span>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
           {/* Pagination */}
           <div
             style={{

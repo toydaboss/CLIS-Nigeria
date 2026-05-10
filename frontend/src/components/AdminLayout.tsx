@@ -1,5 +1,7 @@
 import { clearAuth, getUser } from "@/lib/auth";
+import { useTheme } from "@/lib/theme";
 import { Link, useNavigate } from "@tanstack/react-router";
+import { useState } from "react";
 
 interface AdminLayoutProps {
   children: React.ReactNode;
@@ -31,7 +33,6 @@ const NAV_ITEMS: Array<{
     label: "Disputes",
     path: "/admin/disputes",
     icon: "M12 2L2 21h20L12 2zM12 9v5",
-    count: 7,
   },
 ];
 
@@ -56,7 +57,10 @@ const ADMIN_ITEMS: Array<{ label: string; icon: string; path: string }> = [
 export function AdminLayout({ children, active }: AdminLayoutProps) {
   const user = getUser();
   const navigate = useNavigate();
+  const { theme, toggle } = useTheme();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
+  const closeSidebar = () => setSidebarOpen(false);
   const handleLogout = () => {
     clearAuth();
     navigate({ to: "/admin/login" });
@@ -79,8 +83,13 @@ export function AdminLayout({ children, active }: AdminLayoutProps) {
         overflow: "hidden",
       }}
     >
+      <div
+        className={`sidebar-overlay${sidebarOpen ? " sidebar-open" : ""}`}
+        onClick={closeSidebar}
+      />
+
       {/* Sidebar */}
-      <aside className="sidebar">
+      <aside className={`sidebar${sidebarOpen ? " sidebar-open" : ""}`}>
         <div className="sidebar-brand">
           <div className="clis-mark" style={{ width: 36, height: 36 }}>
             <svg width="20" height="20" viewBox="0 0 22 22" fill="none">
@@ -115,6 +124,7 @@ export function AdminLayout({ children, active }: AdminLayoutProps) {
             key={label}
             to={path}
             className={`sidebar-item ${active === label ? "active" : ""}`}
+            onClick={closeSidebar}
           >
             <svg
               width="17"
@@ -140,6 +150,7 @@ export function AdminLayout({ children, active }: AdminLayoutProps) {
               <Link
                 key={label}
                 to={path}
+                onClick={closeSidebar}
                 className={`sidebar-item ${active === label ? "active" : ""}`}
               >
                 <svg
@@ -189,13 +200,27 @@ export function AdminLayout({ children, active }: AdminLayoutProps) {
           </div>
           <button
             className="btn btn-ghost btn-sm"
-            style={{ width: 28, height: 28, padding: 0, flexShrink: 0 }}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 5,
+              flexShrink: 0,
+              background: "rgba(255,255,255,0.08)",
+              border: "1px solid rgba(255,255,255,0.12)",
+              color: "rgba(226,236,245,0.80)",
+              borderRadius: 6,
+              padding: "5px 10px",
+              cursor: "pointer",
+              fontSize: 12,
+              fontWeight: 600,
+              letterSpacing: "0.02em",
+            }}
             onClick={handleLogout}
             title="Sign out"
           >
             <svg
-              width="15"
-              height="15"
+              width="13"
+              height="13"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
@@ -219,6 +244,24 @@ export function AdminLayout({ children, active }: AdminLayoutProps) {
       >
         {/* Top bar */}
         <div className="topbar">
+          {/* Hamburger (mobile only) */}
+          <button
+            className="topbar-hamburger"
+            onClick={() => setSidebarOpen((o) => !o)}
+            aria-label="Toggle navigation"
+          >
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+            >
+              <path d="M3 6h18M3 12h18M3 18h18" />
+            </svg>
+          </button>
           <div className="topbar-search">
             <svg
               width="15"
@@ -265,6 +308,45 @@ export function AdminLayout({ children, active }: AdminLayoutProps) {
                 </>
               )}
             </span>
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={toggle}
+              title={
+                theme === "dark"
+                  ? "Switch to light mode"
+                  : "Switch to dark mode"
+              }
+              style={{ width: 36, padding: 0 }}
+            >
+              {theme === "dark" ? (
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <circle cx="12" cy="12" r="5" />
+                  <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+                </svg>
+              ) : (
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />
+                </svg>
+              )}
+            </button>
             <button
               className="btn btn-ghost btn-sm"
               style={{ width: 36, padding: 0 }}

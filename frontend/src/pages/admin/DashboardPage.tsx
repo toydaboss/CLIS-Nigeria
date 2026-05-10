@@ -66,7 +66,7 @@ export function DashboardPage() {
 
   return (
     <AdminLayout active="Dashboard">
-      <div style={{ padding: "32px 36px" }}>
+      <div className="page-pad">
         {/* Welcome banner */}
         <div
           className="card"
@@ -99,6 +99,8 @@ export function DashboardPage() {
               justifyContent: "space-between",
               alignItems: "center",
               position: "relative",
+              gap: 16,
+              flexWrap: "wrap",
             }}
           >
             <div>
@@ -123,7 +125,7 @@ export function DashboardPage() {
               </div>
             </div>
             <button
-              className="btn btn-gold btn-lg"
+              className="btn btn-gold"
               onClick={() => navigate({ to: "/admin/register" })}
             >
               <svg
@@ -143,14 +145,7 @@ export function DashboardPage() {
         </div>
 
         {/* Stats */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(4, 1fr)",
-            gap: 16,
-            marginBottom: 28,
-          }}
-        >
+        <div className="grid-4" style={{ marginBottom: 28 }}>
           <StatCard
             label="Total Registered Titles"
             value={stats?.totalTitles ?? "—"}
@@ -180,9 +175,7 @@ export function DashboardPage() {
         </div>
 
         {/* Two-column */}
-        <div
-          style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr", gap: 20 }}
-        >
+        <div className="grid-dash">
           {/* Recent activity */}
           <div className="card">
             <div
@@ -206,86 +199,89 @@ export function DashboardPage() {
                 View all →
               </a>
             </div>
-            <table className="dtable">
-              <thead>
-                <tr>
-                  <th>Title Ref.</th>
-                  <th>Operation</th>
-                  <th>Jurisdiction</th>
-                  <th>Status</th>
-                  <th>Time</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(recent ?? []).slice(0, 5).map((row, i) => {
-                  const isInsert = row.operation === "INSERT";
-                  const timeAgo = (() => {
-                    const diff = Date.now() - new Date(row.timestamp).getTime();
-                    const m = Math.floor(diff / 60000);
-                    if (m < 60) return `${m} min ago`;
-                    return `${Math.floor(m / 60)}h ${m % 60}m ago`;
-                  })();
-                  return (
-                    <tr key={i}>
-                      <td>
-                        <span
-                          className="t-mono"
-                          style={{ fontSize: 12, fontWeight: 600 }}
-                        >
-                          {row.record_ref}
-                        </span>
-                      </td>
-                      <td>
-                        <span
-                          style={{
-                            fontSize: 11,
-                            padding: "2px 7px",
-                            borderRadius: 4,
-                            background: isInsert
-                              ? "var(--c-success-50)"
-                              : "var(--c-blue-50)",
-                            color: isInsert
-                              ? "var(--c-success-700)"
-                              : "var(--c-blue-800)",
-                            fontFamily: "var(--f-mono)",
-                            fontWeight: 600,
-                          }}
-                        >
-                          {row.operation}
-                        </span>
-                      </td>
-                      <td className="muted" style={{ fontSize: 13 }}>
-                        {[row.jurisdiction_state, row.lga]
-                          .filter(Boolean)
-                          .join(" · ")}
-                      </td>
-                      <td>
-                        <StatusBadge kind={statusToKind(row.status)} small>
-                          {row.status?.toUpperCase()}
-                        </StatusBadge>
-                      </td>
-                      <td className="muted tabular" style={{ fontSize: 12 }}>
-                        {timeAgo}
+            <div className="table-wrap">
+              <table className="dtable">
+                <thead>
+                  <tr>
+                    <th>Title Ref.</th>
+                    <th>Operation</th>
+                    <th>Jurisdiction</th>
+                    <th>Status</th>
+                    <th>Time</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(recent ?? []).slice(0, 5).map((row, i) => {
+                    const isInsert = row.operation === "INSERT";
+                    const timeAgo = (() => {
+                      const diff =
+                        Date.now() - new Date(row.timestamp).getTime();
+                      const m = Math.floor(diff / 60000);
+                      if (m < 60) return `${m} min ago`;
+                      return `${Math.floor(m / 60)}h ${m % 60}m ago`;
+                    })();
+                    return (
+                      <tr key={i}>
+                        <td>
+                          <span
+                            className="t-mono"
+                            style={{ fontSize: 12, fontWeight: 600 }}
+                          >
+                            {row.record_ref}
+                          </span>
+                        </td>
+                        <td>
+                          <span
+                            style={{
+                              fontSize: 11,
+                              padding: "2px 7px",
+                              borderRadius: 4,
+                              background: isInsert
+                                ? "var(--c-success-50)"
+                                : "var(--c-blue-50)",
+                              color: isInsert
+                                ? "var(--c-success-700)"
+                                : "var(--c-blue-800)",
+                              fontFamily: "var(--f-mono)",
+                              fontWeight: 600,
+                            }}
+                          >
+                            {row.operation}
+                          </span>
+                        </td>
+                        <td className="muted" style={{ fontSize: 13 }}>
+                          {[row.jurisdiction_state, row.lga]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </td>
+                        <td>
+                          <StatusBadge kind={statusToKind(row.status)} small>
+                            {row.status?.toUpperCase()}
+                          </StatusBadge>
+                        </td>
+                        <td className="muted tabular" style={{ fontSize: 12 }}>
+                          {timeAgo}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {(!recent || recent.length === 0) && (
+                    <tr>
+                      <td
+                        colSpan={5}
+                        style={{
+                          textAlign: "center",
+                          padding: 32,
+                          color: "var(--c-ink-500)",
+                        }}
+                      >
+                        No recent activity
                       </td>
                     </tr>
-                  );
-                })}
-                {(!recent || recent.length === 0) && (
-                  <tr>
-                    <td
-                      colSpan={5}
-                      style={{
-                        textAlign: "center",
-                        padding: 32,
-                        color: "var(--c-ink-500)",
-                      }}
-                    >
-                      No recent activity
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
 
           {/* Right column */}

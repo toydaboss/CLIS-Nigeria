@@ -2,37 +2,33 @@ import express from "express";
 import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// Must mock before importing routes
-vi.mock("../../db", () => ({
-  pool: { query: vi.fn() },
+vi.mock("../../db/models/Title", () => ({
+  Title: { findOne: vi.fn() },
 }));
 
-import { pool } from "../../db";
+import { Title } from "../../db/models/Title";
 import publicRouter from "../../routes/public";
 
 const app = express();
 app.use(express.json());
 app.use("/api", publicRouter);
 
-const mockQuery = vi.mocked(
-  pool.query as (...args: unknown[]) => Promise<unknown>,
-);
+const mockFindOne = vi.mocked(Title.findOne);
 
-const REGISTERED_ROW = {
-  title_ref: "LAGOS-2024-00142",
-  jurisdiction_state: "Lagos",
-  registration_date: "2024-03-14",
+const REGISTERED_DOC = {
+  titleRef: "LAGOS-2024-00142",
+  jurisdictionState: "Lagos",
+  registrationDate: new Date("2024-03-14"),
   status: "registered",
-  dispute_case: null,
-  last_modified: "2024-03-14T10:00:00Z",
+  disputeCase: null,
 };
 
-const DISPUTED_ROW = {
-  ...REGISTERED_ROW,
-  title_ref: "ABUJA-2022-08891",
-  jurisdiction_state: "FCT Abuja",
+const DISPUTED_DOC = {
+  ...REGISTERED_DOC,
+  titleRef: "ABUJA-2022-08891",
+  jurisdictionState: "FCT Abuja",
   status: "disputed",
-  dispute_case: "DSP-2026-0418",
+  disputeCase: "DSP-2026-0418",
 };
 
 describe("GET /api/titles/:ref — format validation", () => {
@@ -40,13 +36,6 @@ describe("GET /api/titles/:ref — format validation", () => {
     const res = await request(app).get("/api/titles/not-a-ref");
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/Invalid title reference format/);
-  });
-
-  it("returns 400 for lowercase ref", async () => {
-    const res = await request(app).get("/api/titles/lagos-2024-00142");
-    // lowercase is cleaned to uppercase but format has no lowercase guard — just check response
-    // route uppercases the input so this should actually pass format check
-    // (no DB call needed — will fail at DB mock if format passes)
   });
 
   it("returns 400 when year part is missing", async () => {
@@ -67,18 +56,22 @@ describe("GET /api/titles/:ref — format validation", () => {
 
 describe("GET /api/titles/:ref — DB responses", () => {
   beforeEach(() => {
-    mockQuery.mockReset();
+    mockFindOne.mockReset();
   });
 
   it("returns found:false when title does not exist", async () => {
-    mockQuery.mockResolvedValueOnce({ rows: [] });
+    mockFindOne.mockReturnValueOnce({
+      lean: vi.fn().mockResolvedValueOnce(null),
+    } as any);
     const res = await request(app).get("/api/titles/LAGOS-2024-00000");
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ found: false, searched: "LAGOS-2024-00000" });
   });
 
   it("returns title data for a registered title", async () => {
-    mockQuery.mockResolvedValueOnce({ rows: [REGISTERED_ROW] });
+    mockFindOne.mockReturnValueOnce({
+      lean: vi.fn().mockResolvedValueOnce(REGISTERED_DOC),
+    } as any);
     const res = await request(app).get("/api/titles/LAGOS-2024-00142");
     expect(res.status).toBe(200);
     expect(res.body.found).toBe(true);
@@ -89,7 +82,9 @@ describe("GET /api/titles/:ref — DB responses", () => {
   });
 
   it("returns dispute case for a disputed title", async () => {
-    mockQuery.mockResolvedValueOnce({ rows: [DISPUTED_ROW] });
+    mockFindOne.mockReturnValueOnce({
+      lean: vi.fn().mockResolvedValueOnce(DISPUTED_DOC),
+    } as any);
     const res = await request(app).get("/api/titles/ABUJA-2022-08891");
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("disputed");
@@ -97,21 +92,26 @@ describe("GET /api/titles/:ref — DB responses", () => {
   });
 
   it("uppercases the ref before querying", async () => {
-    mockQuery.mockResolvedValueOnce({ rows: [REGISTERED_ROW] });
+    mockFindOne.mockReturnValueOnce({
+      lean: vi.fn().mockResolvedValueOnce(REGISTERED_DOC),
+    } as any);
     await request(app).get("/api/titles/lagos-2024-00142");
-    const calledWith = mockQuery.mock.calls[0][1];
-    expect(calledWith).toEqual(["LAGOS-2024-00142"]);
+    expect(mockFindOne).toHaveBeenCalledWith({ titleRef: "LAGOS-2024-00142" });
   });
 
   it("returns 500 on unexpected DB error", async () => {
-    mockQuery.mockRejectedValueOnce(new Error("connection lost"));
+    mockFindOne.mockReturnValueOnce({
+      lean: vi.fn().mockRejectedValueOnce(new Error("connection lost")),
+    } as any);
     const res = await request(app).get("/api/titles/LAGOS-2024-00142");
     expect(res.status).toBe(500);
   });
 
-  it("multi-word state ref (FCT Abuja format) passes validation", async () => {
-    mockQuery.mockResolvedValueOnce({ rows: [] });
+  it("multi-word state ref (FCT format) passes validation", async () => {
+    mockFindOne.mockReturnValueOnce({
+      lean: vi.fn().mockResolvedValueOnce(null),
+    } as any);
     const res = await request(app).get("/api/titles/FCT-2022-08891");
-    expect(res.status).toBe(200); // valid format, just not found
+    expect(res.status).toBe(200);
   });
 });

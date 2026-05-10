@@ -5,10 +5,13 @@ import helmet from "helmet";
 
 dotenv.config();
 
+import { connectDB } from "./db";
 import auditRouter from "./routes/admin/audit";
 import authRouter from "./routes/admin/auth";
 import dashboardRouter from "./routes/admin/dashboard";
+import jurisdictionsRouter from "./routes/admin/jurisdictions";
 import titlesRouter from "./routes/admin/titles";
+import usersRouter from "./routes/admin/users";
 import publicRouter from "./routes/public";
 
 const app = express();
@@ -22,20 +25,25 @@ app.use(
 );
 app.use(express.json());
 
-// Public endpoints
 app.use("/api", publicRouter);
-
-// Auth
 app.use("/api/auth", authRouter);
-
-// Protected admin endpoints
 app.use("/api/admin/dashboard", dashboardRouter);
 app.use("/api/admin/titles", titlesRouter);
 app.use("/api/admin/audit", auditRouter);
+app.use("/api/admin/users", usersRouter);
+app.use("/api/admin/jurisdictions", jurisdictionsRouter);
 
 app.get("/api/health", (_req, res) => res.json({ ok: true, ts: new Date() }));
 
 const PORT = parseInt(process.env.PORT || "3001", 10);
-app.listen(PORT, () => {
-  console.log(`CLIS Nigeria API running on http://localhost:${PORT}`);
-});
+
+connectDB()
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`CLIS Nigeria API running on http://localhost:${PORT}`);
+    });
+  })
+  .catch((err) => {
+    console.error("Failed to connect to MongoDB:", err);
+    process.exit(1);
+  });

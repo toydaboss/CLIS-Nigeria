@@ -3,62 +3,81 @@ import jwt from "jsonwebtoken";
 import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../../../db", () => ({ pool: { query: vi.fn(), connect: vi.fn() } }));
+vi.mock("../../../db/models/Title", () => ({
+  Title: {
+    findOne: vi.fn(),
+    find: vi.fn(),
+    create: vi.fn(),
+    updateOne: vi.fn(),
+    countDocuments: vi.fn(),
+  },
+}));
+vi.mock("../../../db/models/AuditLog", () => ({
+  AuditLog: { create: vi.fn() },
+}));
 
-import { pool } from "../../../db";
+import { AuditLog } from "../../../db/models/AuditLog";
+import { Title } from "../../../db/models/Title";
 import titlesRouter from "../../../routes/admin/titles";
 
 const app = express();
 app.use(express.json());
 app.use("/api/admin/titles", titlesRouter);
 
-const mockQuery = vi.mocked(
-  pool.query as (...a: unknown[]) => Promise<unknown>,
-);
-const mockConnect = vi.mocked(pool.connect as () => Promise<unknown>);
-
 const JWT_SECRET = process.env.JWT_SECRET!;
+const FAKE_ID = "507f1f77bcf86cd799439011";
 
 function makeAuthHeader(role: "registrar" | "admin" = "registrar") {
   const token = jwt.sign(
-    { userId: 1, userCode: "USR-LSR-0241", role, jurisdictionState: "Lagos" },
+    {
+      userId: FAKE_ID,
+      userCode: "USR-LSR-0241",
+      role,
+      jurisdictionState: "Lagos",
+    },
     JWT_SECRET,
   );
   return `Bearer ${token}`;
 }
 
-// Build a mock transaction client
-function makeMockClient(queryResults: Array<{ rows: unknown[] }>) {
-  let callIndex = 0;
-  const mockClient = {
-    query: vi
-      .fn()
-      .mockImplementation(() =>
-        Promise.resolve(queryResults[callIndex++] ?? { rows: [] }),
-      ),
-    release: vi.fn(),
+function leanOf(value: unknown) {
+  return { lean: vi.fn().mockResolvedValueOnce(value) } as any;
+}
+
+function chainOf(value: unknown) {
+  const q: any = {
+    sort: vi.fn(),
+    skip: vi.fn(),
+    limit: vi.fn(),
+    select: vi.fn(),
+    lean: vi.fn(),
   };
-  return mockClient;
+  q.sort.mockReturnValue(q);
+  q.skip.mockReturnValue(q);
+  q.limit.mockReturnValue(q);
+  q.select.mockReturnValue(q);
+  q.lean.mockResolvedValueOnce(value);
+  return q;
 }
 
 const SAMPLE_TITLE = {
-  title_ref: "LAGOS-2024-00142",
-  jurisdiction_state: "Lagos",
+  _id: FAKE_ID,
+  titleRef: "LAGOS-2024-00142",
+  jurisdictionState: "Lagos",
   lga: "Ikoyi",
-  registration_date: "2024-03-14",
+  registrationDate: new Date("2024-03-14"),
   status: "registered",
-  registered_by: "USR-LSR-0241",
-  owner_nin_last4: "1234",
-  owner_name_masked: "ADE•••••• ••••••",
-  latitude: "6.4527",
-  longitude: "3.4327",
-  document_ref: "LSR/IKY/2024/A-00142",
-  dispute_case: null,
-  last_modified: "2024-03-14T10:00:00Z",
+  registeredBy: "USR-LSR-0241",
+  ownerNinLast4: "1234",
+  ownerNameMasked: "ADE•••••• ••••••",
+  latitude: 6.4527,
+  longitude: 3.4327,
+  documentRef: "LSR/IKY/2024/A-00142",
+  disputeCase: null,
 };
 
 describe("GET /api/admin/titles/:ref", () => {
-  beforeEach(() => mockQuery.mockReset());
+  beforeEach(() => vi.mocked(Title.findOne).mockReset());
 
   it("returns 401 without Authorization header", async () => {
     const res = await request(app).get("/api/admin/titles/LAGOS-2024-00142");
@@ -66,7 +85,7 @@ describe("GET /api/admin/titles/:ref", () => {
   });
 
   it("returns found:false when title does not exist", async () => {
-    mockQuery.mockResolvedValueOnce({ rows: [] });
+    vi.mocked(Title.findOne).mockReturnValueOnce(leanOf(null));
     const res = await request(app)
       .get("/api/admin/titles/LAGOS-2024-00000")
       .set("Authorization", makeAuthHeader());
@@ -76,30 +95,32 @@ describe("GET /api/admin/titles/:ref", () => {
   });
 
   it("returns full title record including sensitive fields", async () => {
-    mockQuery.mockResolvedValueOnce({ rows: [SAMPLE_TITLE] });
+    vi.mocked(Title.findOne).mockReturnValueOnce(leanOf(SAMPLE_TITLE));
     const res = await request(app)
       .get("/api/admin/titles/LAGOS-2024-00142")
       .set("Authorization", makeAuthHeader());
     expect(res.status).toBe(200);
     expect(res.body.found).toBe(true);
-    expect(res.body.title.owner_nin_last4).toBe("1234");
-    expect(res.body.title.document_ref).toBeDefined();
+    expect(res.body.title.ownerNinLast4).toBe("1234");
+    expect(res.body.title.documentRef).toBeDefined();
   });
 
   it("uppercases the ref", async () => {
-    mockQuery.mockResolvedValueOnce({ rows: [] });
+    vi.mocked(Title.findOne).mockReturnValueOnce(leanOf(null));
     await request(app)
       .get("/api/admin/titles/lagos-2024-00142")
       .set("Authorization", makeAuthHeader());
-    const calledWith = mockQuery.mock.calls[0][1];
-    expect((calledWith as string[])[0]).toBe("LAGOS-2024-00142");
+    expect(Title.findOne).toHaveBeenCalledWith({
+      titleRef: "LAGOS-2024-00142",
+    });
   });
 });
 
 describe("POST /api/admin/titles", () => {
   beforeEach(() => {
-    mockQuery.mockReset();
-    mockConnect.mockReset();
+    vi.mocked(Title.find).mockReset();
+    vi.mocked(Title.create).mockReset();
+    vi.mocked(AuditLog.create).mockReset();
   });
 
   const VALID_PAYLOAD = {
@@ -125,22 +146,15 @@ describe("POST /api/admin/titles", () => {
     const res = await request(app)
       .post("/api/admin/titles")
       .set("Authorization", makeAuthHeader())
-      .send({ ownerNinLast4: "1234" }); // missing titleRef, jurisdictionState, registrationDate
+      .send({ ownerNinLast4: "1234" });
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/Missing required fields/);
   });
 
   it("registers a title successfully and returns 201", async () => {
-    // Pool query for nearby check
-    mockQuery.mockResolvedValueOnce({ rows: [] });
-    // Pool connect for transaction
-    const client = makeMockClient([
-      { rows: [] }, // BEGIN
-      { rows: [SAMPLE_TITLE] }, // INSERT INTO titles
-      { rows: [] }, // INSERT INTO audit_log
-      { rows: [] }, // COMMIT
-    ]);
-    mockConnect.mockResolvedValueOnce(client as never);
+    vi.mocked(Title.find).mockReturnValueOnce(chainOf([]));
+    vi.mocked(Title.create).mockResolvedValueOnce(SAMPLE_TITLE as any);
+    vi.mocked(AuditLog.create).mockResolvedValueOnce({} as any);
 
     const res = await request(app)
       .post("/api/admin/titles")
@@ -150,21 +164,14 @@ describe("POST /api/admin/titles", () => {
     expect(res.status).toBe(201);
     expect(res.body).toHaveProperty("title");
     expect(res.body).toHaveProperty("nearby");
-    expect(client.release).toHaveBeenCalled();
   });
 
   it("returns nearby refs when overlap is detected", async () => {
-    // Pool query for nearby check — returns one nearby title
-    mockQuery.mockResolvedValueOnce({
-      rows: [{ title_ref: "LAGOS-2024-00142" }],
-    });
-    const client = makeMockClient([
-      { rows: [] },
-      { rows: [SAMPLE_TITLE] },
-      { rows: [] },
-      { rows: [] },
-    ]);
-    mockConnect.mockResolvedValueOnce(client as never);
+    vi.mocked(Title.find).mockReturnValueOnce(
+      chainOf([{ titleRef: "LAGOS-2024-00142" }]),
+    );
+    vi.mocked(Title.create).mockResolvedValueOnce(SAMPLE_TITLE as any);
+    vi.mocked(AuditLog.create).mockResolvedValueOnce({} as any);
 
     const res = await request(app)
       .post("/api/admin/titles")
@@ -175,19 +182,11 @@ describe("POST /api/admin/titles", () => {
     expect(res.body.nearby).toContain("LAGOS-2024-00142");
   });
 
-  it("returns 409 on duplicate title_ref (unique constraint)", async () => {
-    mockQuery.mockResolvedValueOnce({ rows: [] });
-    const duplicateError = Object.assign(new Error("duplicate"), {
-      code: "23505",
-    });
-    const client = {
-      query: vi
-        .fn()
-        .mockResolvedValueOnce({ rows: [] }) // BEGIN
-        .mockRejectedValueOnce(duplicateError), // INSERT throws
-      release: vi.fn(),
-    };
-    mockConnect.mockResolvedValueOnce(client as never);
+  it("returns 409 on duplicate titleRef", async () => {
+    vi.mocked(Title.find).mockReturnValueOnce(chainOf([]));
+    vi.mocked(Title.create).mockRejectedValueOnce(
+      Object.assign(new Error("dup"), { code: 11000 }),
+    );
 
     const res = await request(app)
       .post("/api/admin/titles")
@@ -196,36 +195,26 @@ describe("POST /api/admin/titles", () => {
 
     expect(res.status).toBe(409);
     expect(res.body.error).toMatch(/already exists/);
-    expect(client.release).toHaveBeenCalled();
   });
 
-  it("rolls back transaction and releases client on DB error", async () => {
-    mockQuery.mockResolvedValueOnce({ rows: [] });
-    const client = {
-      query: vi
-        .fn()
-        .mockResolvedValueOnce({ rows: [] }) // BEGIN
-        .mockRejectedValueOnce(new Error("insert failed")), // INSERT
-      release: vi.fn(),
-    };
-    mockConnect.mockResolvedValueOnce(client as never);
+  it("returns 500 on unexpected DB error", async () => {
+    vi.mocked(Title.find).mockReturnValueOnce(chainOf([]));
+    vi.mocked(Title.create).mockRejectedValueOnce(new Error("insert failed"));
 
-    await request(app)
+    const res = await request(app)
       .post("/api/admin/titles")
       .set("Authorization", makeAuthHeader())
       .send(VALID_PAYLOAD);
 
-    const calls = (client.query as ReturnType<typeof vi.fn>).mock.calls.map(
-      (c) => c[0] as string,
-    );
-    expect(calls.some((q) => q.includes("ROLLBACK"))).toBe(true);
-    expect(client.release).toHaveBeenCalled();
+    expect(res.status).toBe(500);
   });
 });
 
 describe("PATCH /api/admin/titles/:ref/dispute", () => {
   beforeEach(() => {
-    mockConnect.mockReset();
+    vi.mocked(Title.findOne).mockReset();
+    vi.mocked(Title.updateOne).mockReset();
+    vi.mocked(AuditLog.create).mockReset();
   });
 
   it("returns 401 without auth", async () => {
@@ -236,30 +225,20 @@ describe("PATCH /api/admin/titles/:ref/dispute", () => {
   });
 
   it("returns 404 when title does not exist", async () => {
-    const client = makeMockClient([
-      { rows: [] }, // BEGIN
-      { rows: [] }, // SELECT — not found
-    ]);
-    mockConnect.mockResolvedValueOnce(client as never);
-
+    vi.mocked(Title.findOne).mockReturnValueOnce(leanOf(null));
     const res = await request(app)
       .patch("/api/admin/titles/LAGOS-2024-99999/dispute")
       .set("Authorization", makeAuthHeader())
       .send({ disputeCase: "DSP-999" });
-
     expect(res.status).toBe(404);
-    expect(client.release).toHaveBeenCalled();
   });
 
   it("flags a dispute and returns ok:true", async () => {
-    const client = makeMockClient([
-      { rows: [] }, // BEGIN
-      { rows: [{ status: "registered" }] }, // SELECT existing
-      { rows: [] }, // UPDATE
-      { rows: [] }, // INSERT audit_log
-      { rows: [] }, // COMMIT
-    ]);
-    mockConnect.mockResolvedValueOnce(client as never);
+    vi.mocked(Title.findOne).mockReturnValueOnce(
+      leanOf({ status: "registered" }),
+    );
+    vi.mocked(Title.updateOne).mockResolvedValueOnce({} as any);
+    vi.mocked(AuditLog.create).mockResolvedValueOnce({} as any);
 
     const res = await request(app)
       .patch("/api/admin/titles/LAGOS-2024-00142/dispute")
@@ -268,12 +247,14 @@ describe("PATCH /api/admin/titles/:ref/dispute", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.ok).toBe(true);
-    expect(client.release).toHaveBeenCalled();
   });
 });
 
 describe("GET /api/admin/titles (list)", () => {
-  beforeEach(() => mockQuery.mockReset());
+  beforeEach(() => {
+    vi.mocked(Title.find).mockReset();
+    vi.mocked(Title.countDocuments).mockReset();
+  });
 
   it("returns 401 without auth", async () => {
     const res = await request(app).get("/api/admin/titles");
@@ -281,9 +262,8 @@ describe("GET /api/admin/titles (list)", () => {
   });
 
   it("returns paginated list with default limit 20", async () => {
-    mockQuery
-      .mockResolvedValueOnce({ rows: [SAMPLE_TITLE] })
-      .mockResolvedValueOnce({ rows: [{ count: "42" }] });
+    vi.mocked(Title.find).mockReturnValueOnce(chainOf([SAMPLE_TITLE]));
+    vi.mocked(Title.countDocuments).mockResolvedValueOnce(42 as any);
 
     const res = await request(app)
       .get("/api/admin/titles")
@@ -297,9 +277,8 @@ describe("GET /api/admin/titles (list)", () => {
   });
 
   it("respects offset and limit query params", async () => {
-    mockQuery
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [{ count: "100" }] });
+    vi.mocked(Title.find).mockReturnValueOnce(chainOf([]));
+    vi.mocked(Title.countDocuments).mockResolvedValueOnce(100 as any);
 
     const res = await request(app)
       .get("/api/admin/titles?limit=10&offset=30")
@@ -310,9 +289,8 @@ describe("GET /api/admin/titles (list)", () => {
   });
 
   it("caps limit at 100", async () => {
-    mockQuery
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [{ count: "0" }] });
+    vi.mocked(Title.find).mockReturnValueOnce(chainOf([]));
+    vi.mocked(Title.countDocuments).mockResolvedValueOnce(0 as any);
 
     const res = await request(app)
       .get("/api/admin/titles?limit=999")

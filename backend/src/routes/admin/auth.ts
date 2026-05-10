@@ -2,7 +2,7 @@ import bcrypt from "bcryptjs";
 import { Router } from "express";
 import jwt from "jsonwebtoken";
 import { authenticator } from "otplib";
-import { pool } from "../../db";
+import { User } from "../../db/models/User";
 
 const router = Router();
 
@@ -17,31 +17,25 @@ router.post("/login", async (req, res) => {
   }
 
   try {
-    const { rows } = await pool.query("SELECT * FROM users WHERE email = $1", [
-      email.toLowerCase().trim(),
-    ]);
-    if (rows.length === 0) {
+    const user = await User.findOne({
+      email: email.toLowerCase().trim(),
+    }).lean();
+    if (!user) {
       return res.status(401).json({ error: "Invalid credentials" });
     }
 
-    const user = rows[0];
-    const valid = await bcrypt.compare(password, user.password_hash);
+    const valid = await bcrypt.compare(password, user.passwordHash);
     if (!valid) {
       return res.status(401).json({ error: "Invalid credentials" });
     }
 
-    // Issue a short-lived temp token for the MFA step
     const tempToken = jwt.sign(
-      { userId: user.id, step: "mfa" },
+      { userId: user._id.toString(), step: "mfa" },
       JWT_TEMP_SECRET,
       { expiresIn: "5m" },
     );
 
-    return res.json({
-      tempToken,
-      name: user.name,
-      email: user.email,
-    });
+    return res.json({ tempToken, name: user.name, email: user.email });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: "Internal server error" });
@@ -55,7 +49,7 @@ router.post("/mfa", async (req, res) => {
     return res.status(400).json({ error: "tempToken and code required" });
   }
 
-  let decoded: { userId: number; step: string };
+  let decoded: { userId: string; step: string };
   try {
     decoded = jwt.verify(tempToken, JWT_TEMP_SECRET) as typeof decoded;
   } catch {
@@ -67,30 +61,23 @@ router.post("/mfa", async (req, res) => {
   }
 
   try {
-    const { rows } = await pool.query("SELECT * FROM users WHERE id = $1", [
-      decoded.userId,
-    ]);
-    if (rows.length === 0)
-      return res.status(401).json({ error: "User not found" });
+    const user = await User.findById(decoded.userId).lean();
+    if (!user) return res.status(401).json({ error: "User not found" });
 
-    const user = rows[0];
-
-    // Verify TOTP
     const isValid = authenticator.verify({
       token: code.replace(/\s/g, ""),
-      secret: user.mfa_secret,
+      secret: user.mfaSecret,
     });
     if (!isValid) {
       return res.status(401).json({ error: "Invalid TOTP code" });
     }
 
-    // Issue full access token
     const accessToken = jwt.sign(
       {
-        userId: user.id,
-        userCode: user.user_code,
+        userId: user._id.toString(),
+        userCode: user.userCode,
         role: user.role,
-        jurisdictionState: user.jurisdiction_state,
+        jurisdictionState: user.jurisdictionState,
       },
       JWT_SECRET,
       { expiresIn: "8h" },
@@ -99,12 +86,12 @@ router.post("/mfa", async (req, res) => {
     return res.json({
       accessToken,
       user: {
-        id: user.id,
+        id: user._id.toString(),
         name: user.name,
         email: user.email,
         role: user.role,
-        userCode: user.user_code,
-        jurisdictionState: user.jurisdiction_state,
+        userCode: user.userCode,
+        jurisdictionState: user.jurisdictionState,
       },
     });
   } catch (err) {
@@ -113,7 +100,7 @@ router.post("/mfa", async (req, res) => {
   }
 });
 
-// POST /api/auth/logout — just a signal; client discards the token
+// POST /api/auth/logout — client discards the token
 router.post("/logout", (_req, res) => res.json({ ok: true }));
 
 export default router;

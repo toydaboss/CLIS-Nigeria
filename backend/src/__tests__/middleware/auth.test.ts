@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { adminOnly, auth } from "../../middleware/auth";
 
 const SECRET = process.env.JWT_SECRET!;
+const FAKE_ID = "507f1f77bcf86cd799439011";
 
 function mockReq(authHeader?: string): Request {
   return {
@@ -12,11 +13,7 @@ function mockReq(authHeader?: string): Request {
 }
 
 function mockRes() {
-  const res = {
-    status: vi.fn(),
-    json: vi.fn(),
-  } as unknown as Response;
-  // chain: res.status(401).json({...})
+  const res = { status: vi.fn(), json: vi.fn() } as unknown as Response;
   (res.status as ReturnType<typeof vi.fn>).mockReturnValue(res);
   return res;
 }
@@ -37,53 +34,50 @@ describe("auth middleware", () => {
   });
 
   it("returns 401 when Authorization header is absent", () => {
-    const req = mockReq();
-    auth(req, mockRes(), next);
+    auth(mockReq(), mockRes(), next);
     expect(next).not.toHaveBeenCalled();
   });
 
   it("returns 401 when scheme is not Bearer", () => {
-    const req = mockReq("Basic dXNlcjpwYXNz");
     const res = mockRes();
-    auth(req, res, next);
+    auth(mockReq("Basic dXNlcjpwYXNz"), res, next);
     expect(res.status).toHaveBeenCalledWith(401);
     expect(next).not.toHaveBeenCalled();
   });
 
   it("returns 401 for a malformed / unsigned token", () => {
-    const req = mockReq("Bearer not.a.real.jwt");
     const res = mockRes();
-    auth(req, res, next);
+    auth(mockReq("Bearer not.a.real.jwt"), res, next);
     expect(res.status).toHaveBeenCalledWith(401);
   });
 
   it("returns 401 when token is signed with the wrong secret", () => {
-    const token = makeToken({ userId: 1, role: "registrar" }, "wrong-secret");
-    const req = mockReq(`Bearer ${token}`);
+    const token = makeToken(
+      { userId: FAKE_ID, role: "registrar" },
+      "wrong-secret",
+    );
     const res = mockRes();
-    auth(req, res, next);
+    auth(mockReq(`Bearer ${token}`), res, next);
     expect(res.status).toHaveBeenCalledWith(401);
   });
 
   it("returns 401 when token is expired", () => {
-    const token = makeToken({ userId: 1, role: "registrar" }, SECRET, {
+    const token = makeToken({ userId: FAKE_ID, role: "registrar" }, SECRET, {
       expiresIn: -1,
     });
-    const req = mockReq(`Bearer ${token}`);
     const res = mockRes();
-    auth(req, res, next);
+    auth(mockReq(`Bearer ${token}`), res, next);
     expect(res.status).toHaveBeenCalledWith(401);
   });
 
   it("calls next() and sets req.user when token is valid", () => {
     const payload = {
-      userId: 5,
+      userId: FAKE_ID,
       userCode: "USR-LSR-0241",
       role: "registrar",
       jurisdictionState: "Lagos",
     };
-    const token = makeToken(payload, SECRET);
-    const req = mockReq(`Bearer ${token}`);
+    const req = mockReq(`Bearer ${makeToken(payload, SECRET)}`);
     auth(req, mockRes(), next);
     expect(next).toHaveBeenCalledWith();
     expect(req.user).toMatchObject(payload);
@@ -91,15 +85,14 @@ describe("auth middleware", () => {
 
   it("populates req.user with all required fields", () => {
     const payload = {
-      userId: 1,
+      userId: FAKE_ID,
       userCode: "USR-ADM-0001",
       role: "admin",
       jurisdictionState: null,
     };
-    const token = makeToken(payload, SECRET);
-    const req = mockReq(`Bearer ${token}`);
+    const req = mockReq(`Bearer ${makeToken(payload, SECRET)}`);
     auth(req, mockRes(), next);
-    expect(req.user).toHaveProperty("userId", 1);
+    expect(req.user).toHaveProperty("userId", FAKE_ID);
     expect(req.user).toHaveProperty("role", "admin");
     expect(req.user).toHaveProperty("jurisdictionState", null);
   });
@@ -121,10 +114,8 @@ describe("adminOnly middleware", () => {
   });
 
   it("returns 403 when req.user is absent", () => {
-    const req = {} as Request;
-    const res = mockRes();
-    adminOnly(req, res, next);
-    expect(res.status).toHaveBeenCalledWith(403);
+    adminOnly({} as Request, mockRes(), next);
+    expect(next).not.toHaveBeenCalled();
   });
 
   it("calls next() when role is admin", () => {

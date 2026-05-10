@@ -11,9 +11,12 @@ import {
 import { VerifyPage } from "@/pages/VerifyPage";
 import { AuditLogPage } from "@/pages/admin/AuditLogPage";
 import { DashboardPage } from "@/pages/admin/DashboardPage";
+import { DisputesPage } from "@/pages/admin/DisputesPage";
+import { JurisdictionsPage } from "@/pages/admin/JurisdictionsPage";
 import { LoginPage } from "@/pages/admin/LoginPage";
 import { LookupPage } from "@/pages/admin/LookupPage";
 import { RegisterTitlePage } from "@/pages/admin/RegisterTitlePage";
+import { UsersPage } from "@/pages/admin/UsersPage";
 
 // ── Route definitions ───────────────────────────────────────
 const rootRoute = createRootRoute({
@@ -74,6 +77,27 @@ const auditRoute = createRoute({
   component: AuditLogPage,
 });
 
+const disputesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/admin/disputes",
+  beforeLoad: requireAuth,
+  component: DisputesPage,
+});
+
+const usersRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/admin/users",
+  beforeLoad: requireAdmin,
+  component: UsersPage,
+});
+
+const jurisdictionsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/admin/jurisdictions",
+  beforeLoad: requireAdmin,
+  component: JurisdictionsPage,
+});
+
 // Catch-all redirect /admin → /admin/dashboard
 const adminRedirectRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -91,7 +115,10 @@ const routeTree = rootRoute.addChildren([
   registerRoute,
   lookupRoute,
   auditRoute,
+  disputesRoute,
   adminRedirectRoute,
+  usersRoute,
+  jurisdictionsRoute,
 ]);
 
 export const router = createRouter({ routeTree });

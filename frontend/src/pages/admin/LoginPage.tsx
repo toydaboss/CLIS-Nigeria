@@ -2,7 +2,7 @@ import { Logo } from "@/components/Logo";
 import { loginCredentials, loginMfa } from "@/lib/api";
 import { setAuth } from "@/lib/auth";
 import { useMutation } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { FormEvent, useState } from "react";
 
 function StatsRow() {
@@ -51,6 +51,7 @@ function StatsRow() {
 function BrandPanel() {
   return (
     <div
+      className="!hidden md:!flex"
       style={{
         width: 540,
         background: "var(--c-blue-900)",
@@ -73,6 +74,12 @@ function BrandPanel() {
                           repeating-linear-gradient(45deg, transparent 0 24px, rgba(201,168,76,0.04) 24px 25px)`,
         }}
       />
+      <div
+        style={{ marginTop: "auto", position: "relative" }}
+        className="mx-auto"
+      >
+        <img src={"/Coat_of_arms_of_Nigeria.png"} width={250} />
+      </div>
       <div style={{ marginTop: "auto", position: "relative" }}>
         <div
           className="pattern-strip"
@@ -171,6 +178,9 @@ function CredentialsForm({
 
   return (
     <>
+      <Link to="/" className="btn mb-2 !px-0">
+        ← Home
+      </Link>
       <div
         className="t-micro"
         style={{ color: "var(--c-blue-700)", marginBottom: 6 }}
@@ -183,7 +193,6 @@ function CredentialsForm({
       <div className="t-body muted" style={{ marginBottom: 32 }}>
         Use your government-issued credentials.
       </div>
-
       <form
         className="col"
         style={{ display: "flex", flexDirection: "column", gap: 16 }}

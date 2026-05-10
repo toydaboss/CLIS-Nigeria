@@ -8,7 +8,7 @@ import {
 } from "../../lib/auth";
 
 const FAKE_USER: CurrentUser = {
-  id: 1,
+  id: "507f1f77bcf86cd799439011",
   name: "Aisha Bello",
   email: "a.bello@lagosstate.gov.ng",
   role: "registrar",
