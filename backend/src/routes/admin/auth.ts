@@ -4,6 +4,8 @@ import jwt from "jsonwebtoken";
 import { authenticator } from "otplib";
 import { User } from "../../db/models/User";
 
+authenticator.options = { window: 1 };
+
 const router = Router();
 
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
