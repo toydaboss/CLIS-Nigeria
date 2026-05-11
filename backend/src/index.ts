@@ -2,6 +2,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import express from "express";
 import helmet from "helmet";
+import swaggerUi from "swagger-ui-express";
 
 dotenv.config();
 
@@ -13,6 +14,7 @@ import jurisdictionsRouter from "./routes/admin/jurisdictions";
 import titlesRouter from "./routes/admin/titles";
 import usersRouter from "./routes/admin/users";
 import publicRouter from "./routes/public";
+import { swaggerSpec } from "./swagger";
 
 const app = express();
 
@@ -35,6 +37,9 @@ app.use("/api/admin/titles", titlesRouter);
 app.use("/api/admin/audit", auditRouter);
 app.use("/api/admin/users", usersRouter);
 app.use("/api/admin/jurisdictions", jurisdictionsRouter);
+
+app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+app.get("/api/docs.json", (_req, res) => res.json(swaggerSpec));
 
 app.get("/api/health", (_req, res) => res.json({ ok: true, ts: new Date() }));
 
