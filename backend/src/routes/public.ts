@@ -9,11 +9,9 @@ router.get("/titles/:ref", async (req, res) => {
   const clean = ref.trim().toUpperCase();
 
   if (!/^[A-Z]+(?:\s+[A-Z]+)*-\d{4}-\d{5}$/.test(clean)) {
-    return res
-      .status(400)
-      .json({
-        error: "Invalid title reference format. Expected STATE-YEAR-NNNNN.",
-      });
+    return res.status(400).json({
+      error: "Invalid title reference format. Expected STATE-YEAR-NNNNN.",
+    });
   }
 
   try {
