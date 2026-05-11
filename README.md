@@ -12,13 +12,15 @@ A full-stack web application for Nigerian land title registration, public verifi
 - [Tech Stack](#tech-stack)
 - [Project Structure](#project-structure)
 - [Prerequisites](#prerequisites)
-- [Getting Started](#getting-started)
+- [Getting Started (Local)](#getting-started-local)
 - [Environment Variables](#environment-variables)
 - [Database](#database)
 - [Running the Application](#running-the-application)
 - [Demo Credentials](#demo-credentials)
+- [Setting Up MFA](#setting-up-the-authenticator-app-mfa)
 - [API Reference](#api-reference)
 - [Testing](#testing)
+- [Deployment](#deployment)
 - [Docker Reference](#docker-reference)
 
 ---
@@ -29,31 +31,34 @@ CLIS Nigeria provides two main surfaces:
 
 **Public portal** — Any citizen can verify a land title by reference number (e.g. `LAGOS-2024-00142`) without an account. Results show registration status, jurisdiction, and any active dispute.
 
-**Admin portal** — Government registrars and administrators log in with email/password + TOTP two-factor authentication to register new titles, look up full title records, flag disputes, view the dashboard, and review the immutable audit log.
+**Admin portal** — Government registrars and administrators log in with email/password + TOTP two-factor authentication to register new titles, look up full title records, flag disputes, manage users, view jurisdiction statistics, and review the immutable audit log.
+
+The interface is fully responsive — it works on desktop, tablet, and mobile, with a collapsible sidebar drawer on small screens.
 
 ### Target Users
 
-| User           | Role                            |
-| -------------- | ------------------------------- |
-| General public | Read-only title verification    |
-| Land registrar | Register titles, flag disputes  |
-| Administrator  | Full access including audit log |
+| User           | Role                                                           |
+| -------------- | -------------------------------------------------------------- |
+| General public | Read-only title verification                                   |
+| Land registrar | Register titles, look up records, flag disputes                |
+| Administrator  | Full access: titles, disputes, users, jurisdictions, audit log |
 
 ---
 
 ## Tech Stack
 
-| Layer        | Technology                                    |
-| ------------ | --------------------------------------------- |
-| Frontend     | React 18, TypeScript, Vite 5                  |
-| Routing      | TanStack Router v1                            |
-| Server state | TanStack Query v5                             |
-| Styling      | TailwindCSS v4                                |
-| Backend      | Express 4, TypeScript                         |
-| Database     | MongoDB 8 (via Docker)                        |
-| ODM          | Mongoose 8                                    |
-| Auth         | JWT (jsonwebtoken) + TOTP (otplib) + bcryptjs |
-| Testing      | Vitest, Supertest, Testing Library            |
+| Layer        | Technology                                                    |
+| ------------ | ------------------------------------------------------------- |
+| Frontend     | React 18, TypeScript, Vite 5                                  |
+| Routing      | TanStack Router v1                                            |
+| Server state | TanStack Query v5                                             |
+| Styling      | Custom CSS (design tokens, responsive utility classes)        |
+| Backend      | Express 4, TypeScript                                         |
+| Database     | MongoDB 8 (Docker locally, MongoDB Atlas in production)       |
+| ODM          | Mongoose 8                                                    |
+| Auth         | JWT (jsonwebtoken) + TOTP (otplib) + bcryptjs                 |
+| Testing      | Vitest, Supertest, Testing Library                            |
+| Hosting      | Render (backend), Vercel (frontend), MongoDB Atlas (database) |
 
 ---
 
@@ -61,37 +66,60 @@ CLIS Nigeria provides two main surfaces:
 
 ```
 repo/
-├── docker-compose.yml        # MongoDB container
+├── docker-compose.yml          # Local MongoDB container
 ├── backend/
 │   ├── .env.example
-│   ├── src/
-│   │   ├── db/
-│   │   │   ├── index.ts      # Mongoose connection
-│   │   │   ├── seed.ts       # Demo data seeder
-│   │   │   └── models/
-│   │   │       ├── User.ts
-│   │   │       ├── Title.ts
-│   │   │       └── AuditLog.ts
-│   │   ├── middleware/
-│   │   │   └── auth.ts       # JWT + role guards
-│   │   ├── routes/
-│   │   │   ├── public.ts     # GET /api/titles/:ref
-│   │   │   └── admin/
-│   │   │       ├── auth.ts       # Login + MFA
-│   │   │       ├── titles.ts     # Title CRUD
-│   │   │       ├── dashboard.ts  # Stats + activity
-│   │   │       └── audit.ts      # Audit log
-│   │   └── index.ts          # Express app entry point
-│   └── src/__tests__/        # Vitest test suites
+│   ├── package.json
+│   ├── tsconfig.json
+│   └── src/
+│       ├── db/
+│       │   ├── index.ts        # Mongoose connection (with masked URI logging)
+│       │   ├── seed.ts         # Demo data seeder
+│       │   └── models/
+│       │       ├── User.ts
+│       │       ├── Title.ts
+│       │       └── AuditLog.ts
+│       ├── middleware/
+│       │   └── auth.ts         # JWT verification + role guards (auth, adminOnly)
+│       ├── routes/
+│       │   ├── public.ts       # GET /api/titles/:ref, GET /api/health
+│       │   └── admin/
+│       │       ├── auth.ts     # POST /api/auth/login, /mfa, /logout
+│       │       ├── titles.ts   # Title CRUD + dispute flag
+│       │       ├── dashboard.ts # Stats, recent activity, chart data
+│       │       ├── audit.ts    # Paginated audit log (admin only)
+│       │       ├── users.ts    # User management CRUD (admin only)
+│       │       └── jurisdictions.ts # Per-state title + registrar stats (admin only)
+│       ├── __tests__/          # Vitest + Supertest suites (73 tests)
+│       └── index.ts            # Express app entry point
 └── frontend/
     ├── src/
     │   ├── lib/
-    │   │   ├── api.ts        # Axios instance + interceptors
-    │   │   └── auth.ts       # localStorage token helpers
-    │   ├── components/       # RefChip, StatusBadge, Stepper
-    │   ├── routes/           # Page components
-    │   └── router.tsx        # Route definitions + auth guards
-    └── src/__tests__/        # Vitest + Testing Library tests
+    │   │   ├── api.ts          # Axios instance; reads VITE_API_URL in production
+    │   │   ├── auth.ts         # localStorage token helpers, CurrentUser type
+    │   │   ├── queryClient.ts  # TanStack Query configuration
+    │   │   └── theme.ts        # Dark/light mode helpers
+    │   ├── components/
+    │   │   ├── AdminLayout.tsx # Sidebar + topbar shell (responsive, mobile drawer)
+    │   │   ├── Logo.tsx
+    │   │   ├── RefChip.tsx
+    │   │   ├── StatusBadge.tsx
+    │   │   └── Stepper.tsx
+    │   ├── pages/
+    │   │   ├── VerifyPage.tsx          # Public title lookup
+    │   │   └── admin/
+    │   │       ├── LoginPage.tsx
+    │   │       ├── DashboardPage.tsx
+    │   │       ├── RegisterTitlePage.tsx
+    │   │       ├── LookupPage.tsx
+    │   │       ├── DisputesPage.tsx
+    │   │       ├── AuditLogPage.tsx
+    │   │       ├── UsersPage.tsx       # User management (admin only)
+    │   │       └── JurisdictionsPage.tsx # State-level stats (admin only)
+    │   ├── styles/
+    │   │   └── globals.css     # Design tokens + responsive utility classes
+    │   └── router.tsx          # Route definitions + auth guards
+    └── __tests__/              # Vitest + Testing Library suites (60 tests)
 ```
 
 ---
@@ -105,7 +133,7 @@ repo/
 
 ---
 
-## Getting Started
+## Getting Started (Local)
 
 ### 1. Clone and enter the repo
 
@@ -135,7 +163,7 @@ docker exec clis_mongo mongosh -u mongo -p mongo --eval "db.adminCommand({ ping:
 cp backend/.env.example backend/.env
 ```
 
-The defaults in `.env.example` work out of the box with the Docker container. Change `JWT_SECRET` and `JWT_TEMP_SECRET` for any non-local deployment.
+The defaults in `.env.example` work out of the box with the Docker container. Change `JWT_SECRET` and `JWT_TEMP_SECRET` before deploying to a public server.
 
 ### 4. Install backend dependencies and seed the database
 
@@ -145,7 +173,7 @@ npm install
 npm run db:seed
 ```
 
-The seed script will output TOTP secrets and OTP URIs — **save these**. You need them to log in to the admin portal.
+The seed script prints TOTP secrets and OTP URIs — **save these**. You need them to log in to the admin portal.
 
 ### 5. Install frontend dependencies
 
@@ -160,15 +188,23 @@ npm install
 
 ### `backend/.env`
 
-| Variable          | Description                             | Default                                                               |
-| ----------------- | --------------------------------------- | --------------------------------------------------------------------- |
-| `MONGODB_URI`     | MongoDB connection string               | `mongodb://mongo:mongo@127.0.0.1:27017/clis_nigeria?authSource=admin` |
-| `JWT_SECRET`      | Secret for signing access tokens (8h)   | _(change this)_                                                       |
-| `JWT_TEMP_SECRET` | Secret for signing MFA temp tokens (5m) | _(change this)_                                                       |
-| `PORT`            | Backend server port                     | `3001`                                                                |
-| `FRONTEND_URL`    | Allowed CORS origin                     | `http://localhost:5173`                                               |
+| Variable          | Description                                 | Default                                                               |
+| ----------------- | ------------------------------------------- | --------------------------------------------------------------------- |
+| `MONGODB_URI`     | MongoDB connection string                   | `mongodb://mongo:mongo@127.0.0.1:27017/clis_nigeria?authSource=admin` |
+| `JWT_SECRET`      | Secret for signing access tokens (8h TTL)   | _(change this)_                                                       |
+| `JWT_TEMP_SECRET` | Secret for signing MFA temp tokens (5m TTL) | _(change this)_                                                       |
+| `PORT`            | Backend server port                         | `3001`                                                                |
+| `FRONTEND_URL`    | Allowed CORS origin                         | `http://localhost:5173`                                               |
 
 > **Note:** Use `127.0.0.1` not `localhost` in the MongoDB URI. On Linux, `localhost` resolves to a Unix socket; `127.0.0.1` forces TCP which the Docker container requires.
+
+### `frontend/.env` (optional — local dev only)
+
+In development the Vite proxy forwards `/api/*` to `localhost:3001`, so no frontend env file is needed locally. In production, set:
+
+| Variable       | Description                          | Example                                 |
+| -------------- | ------------------------------------ | --------------------------------------- |
+| `VITE_API_URL` | Full backend URL (no trailing slash) | `https://clis-nigeria-api.onrender.com` |
 
 ---
 
@@ -182,13 +218,26 @@ npm install
 | `titles`    | `Title`    | Land title records with coordinates, status, and ownership data     |
 | `auditlogs` | `AuditLog` | Append-only record of every INSERT, UPDATE, and FLAG_DISPUTE action |
 
-### Key schema fields (camelCase throughout)
+### Key schema fields
+
+**User**
+
+```
+email              String   unique, lowercased
+name               String
+role               String   "admin" | "registrar"
+jurisdictionState  String   required for registrar, null for admin
+userCode           String   auto-generated, e.g. "USR-LAG-4821"
+passwordHash       String   bcrypt (12 rounds)
+mfaSecret          String   base32 TOTP secret
+```
 
 **Title**
 
 ```
 titleRef           String   unique, e.g. "LAGOS-2024-00142"
 status             String   "registered" | "disputed" | "pending"
+jurisdictionState  String   Nigerian state name
 latitude/longitude Number   used for proximity conflict detection (~20m radius)
 registeredBy       String   userCode of the registrar who created it
 disputeCase        String   set when status is "disputed"
@@ -213,13 +262,9 @@ npm run db:seed
 
 ### Connecting with MongoDB Compass
 
-Open MongoDB Compass and connect with:
-
 ```
 mongodb://mongo:mongo@127.0.0.1:27017/clis_nigeria?authSource=admin
 ```
-
-### Connecting with pgAdmin (MongoDB plugin) or Compass
 
 | Field         | Value          |
 | ------------- | -------------- |
@@ -270,12 +315,6 @@ These are inserted by `npm run db:seed`. The TOTP secrets are printed fresh each
 | Registrar     | `a.bello@lagosstate.gov.ng` | `Password123!` |
 | Administrator | `o.adeyemi@clis.gov.ng`     | `Password123!` |
 
-**Setting up TOTP:**
-
-1. Run `npm run db:seed` — it prints OTP URIs at the bottom
-2. Scan the URI as a QR code in your authenticator app (use a QR code generator with the printed URI), or manually enter the base32 secret
-3. Use the 6-digit code from the app at the MFA step
-
 ### Public title references for testing
 
 | Reference           | Status     |
@@ -285,6 +324,59 @@ These are inserted by `npm run db:seed`. The TOTP secrets are printed fresh each
 | `LAGOS-2026-04193`  | Registered |
 | `KANO-2025-02211`   | Registered |
 | `RIVERS-2026-00871` | Registered |
+
+---
+
+## Setting Up the Authenticator App (MFA)
+
+Admin login requires a 6-digit TOTP code after entering your password.
+
+### Step 1 — Install an authenticator app
+
+| App                     | Android     | iOS       |
+| ----------------------- | ----------- | --------- |
+| Google Authenticator    | Google Play | App Store |
+| Microsoft Authenticator | Google Play | App Store |
+| Authy                   | Google Play | App Store |
+
+### Step 2 — Run the seed
+
+```bash
+cd backend
+npm run db:seed
+```
+
+Output includes base32 secrets and `otpauth://` URIs for each demo user.
+
+> **Important:** Secrets change every time you re-seed. Update your authenticator app after re-seeding.
+
+### Step 3 — Add accounts to your authenticator app
+
+#### Option A — QR code (recommended)
+
+1. Copy the `otpauth://` URI from the seed output
+2. Visit [https://stefansundin.github.io/2fa-qr](https://stefansundin.github.io/2fa-qr) and paste the URI to generate a QR code
+3. Scan the QR code with your authenticator app
+
+#### Option B — Manual entry
+
+1. Copy the base32 secret (e.g. `OA6U42RQHMSBKOY4`)
+2. In your authenticator app, add a new account manually
+3. Enter the secret and select **Time-based (TOTP)**
+
+### Step 4 — Log in
+
+1. Go to `/admin/login`
+2. Enter email and password → click **Sign In**
+3. Enter the current 6-digit TOTP code → click **Verify**
+
+### Troubleshooting
+
+| Problem                                   | Fix                                                                                                   |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| "Invalid TOTP code" with the correct code | Phone clock may be out of sync — enable **Set time automatically** in your phone's date/time settings |
+| Forgot which secret belongs to which user | Run `npm run db:seed` again and re-add to authenticator                                               |
+| Code rejected immediately after scanning  | Ensure you chose **Time-based (TOTP)**, not counter-based (HOTP)                                      |
 
 ---
 
@@ -305,18 +397,43 @@ These are inserted by `npm run db:seed`. The TOTP secrets are printed fresh each
 | `POST` | `/api/auth/mfa`    | Step 2 — validate TOTP, returns `accessToken`      |
 | `POST` | `/api/auth/logout` | Signal logout (client discards token)              |
 
-### Admin (Bearer token required)
+### Admin — Titles (Registrar+)
 
-| Method  | Endpoint                         | Auth           | Description                |
-| ------- | -------------------------------- | -------------- | -------------------------- |
-| `GET`   | `/api/admin/dashboard/stats`     | Registrar+     | Aggregate title counts     |
-| `GET`   | `/api/admin/dashboard/recent`    | Registrar+     | Last 10 audit entries      |
-| `GET`   | `/api/admin/dashboard/chart`     | Registrar+     | Registrations last 14 days |
-| `GET`   | `/api/admin/titles`              | Registrar+     | Paginated title list       |
-| `GET`   | `/api/admin/titles/:ref`         | Registrar+     | Full title record          |
-| `POST`  | `/api/admin/titles`              | Registrar+     | Register new title         |
-| `PATCH` | `/api/admin/titles/:ref/dispute` | Registrar+     | Flag a dispute             |
-| `GET`   | `/api/admin/audit`               | **Admin only** | Paginated audit log        |
+| Method  | Endpoint                         | Description               |
+| ------- | -------------------------------- | ------------------------- |
+| `GET`   | `/api/admin/titles`              | Paginated title list      |
+| `GET`   | `/api/admin/titles/:ref`         | Full title record         |
+| `POST`  | `/api/admin/titles`              | Register a new title      |
+| `PATCH` | `/api/admin/titles/:ref/dispute` | Flag a dispute on a title |
+
+### Admin — Dashboard (Registrar+)
+
+| Method | Endpoint                      | Description                         |
+| ------ | ----------------------------- | ----------------------------------- |
+| `GET`  | `/api/admin/dashboard/stats`  | Aggregate title counts              |
+| `GET`  | `/api/admin/dashboard/recent` | Last 10 audit entries               |
+| `GET`  | `/api/admin/dashboard/chart`  | Registrations over the last 14 days |
+
+### Admin — Users (Admin only)
+
+| Method   | Endpoint                    | Description                                   |
+| -------- | --------------------------- | --------------------------------------------- |
+| `GET`    | `/api/admin/users`          | List all users                                |
+| `POST`   | `/api/admin/users`          | Create a new user (returns TOTP secret + URI) |
+| `PATCH`  | `/api/admin/users/:id/role` | Change a user's role or jurisdiction          |
+| `DELETE` | `/api/admin/users/:id`      | Remove a user                                 |
+
+### Admin — Jurisdictions (Admin only)
+
+| Method | Endpoint                   | Description                                 |
+| ------ | -------------------------- | ------------------------------------------- |
+| `GET`  | `/api/admin/jurisdictions` | Per-state title counts and registrar counts |
+
+### Admin — Audit Log (Admin only)
+
+| Method | Endpoint           | Description         |
+| ------ | ------------------ | ------------------- |
+| `GET`  | `/api/admin/audit` | Paginated audit log |
 
 ### Title reference format
 
@@ -338,7 +455,7 @@ cd backend
 npm test
 ```
 
-Tests use Vitest + Supertest. Mongoose models are mocked — no live database connection required. The mock pattern used throughout:
+Tests use Vitest + Supertest. Mongoose models are mocked — no live database connection required.
 
 ```typescript
 vi.mock('../../../db/models/Title', () => ({
@@ -355,11 +472,71 @@ npm test
 
 Tests use Vitest + Testing Library in a jsdom environment.
 
-### Run both
+### Run all 133 tests
 
 ```bash
 cd backend && npm test && cd ../frontend && npm test
 ```
+
+---
+
+## Deployment
+
+The application is deployed as three separate services:
+
+| Service     | Provider                                   | Purpose                  |
+| ----------- | ------------------------------------------ | ------------------------ |
+| Database    | [MongoDB Atlas](https://cloud.mongodb.com) | Managed MongoDB cluster  |
+| Backend API | [Render](https://render.com)               | Node.js / Express server |
+| Frontend    | [Vercel](https://vercel.com)               | Static React/Vite build  |
+
+### 1. MongoDB Atlas
+
+1. Create a free M0 cluster at [cloud.mongodb.com](https://cloud.mongodb.com)
+2. Under **Database Access**, create a user with **Read and write** permissions
+   - Use an alphanumeric-only password to avoid URL-encoding issues
+3. Under **Network Access**, add `0.0.0.0/0` to allow Render's dynamic IPs
+4. Get your connection string from **Connect → Drivers** — it looks like:
+   ```
+   mongodb+srv://<user>:<password>@cluster0.xxxxx.mongodb.net/clis_nigeria?retryWrites=true&w=majority
+   ```
+5. Run the seed against Atlas to create demo data:
+   ```bash
+   MONGODB_URI="<atlas-connection-string>" cd backend && npm run db:seed
+   ```
+
+### 2. Render (Backend)
+
+1. Create a new **Web Service** and connect your GitHub repo
+2. Set the **Root Directory** to `backend`
+3. Set the **Build Command** to `npm run build`
+   - The build script runs `npm install --include=dev && tsc` to ensure TypeScript type packages are available during compilation
+4. Set the **Start Command** to `npm start`
+5. Add the following **Environment Variables** in the Render dashboard:
+
+| Key               | Value                                                             |
+| ----------------- | ----------------------------------------------------------------- |
+| `MONGODB_URI`     | Your Atlas connection string                                      |
+| `JWT_SECRET`      | A long random string                                              |
+| `JWT_TEMP_SECRET` | A different long random string                                    |
+| `FRONTEND_URL`    | Your Vercel frontend URL (e.g. `https://clis-nigeria.vercel.app`) |
+
+### 3. Vercel (Frontend)
+
+1. Create a new project and connect your GitHub repo
+2. Set the **Root Directory** to `frontend`
+3. Build settings are auto-detected from `vite.config.ts`
+4. Add the following **Environment Variable** in the Vercel dashboard:
+
+| Key            | Value                                                                  |
+| -------------- | ---------------------------------------------------------------------- |
+| `VITE_API_URL` | Your Render backend URL (e.g. `https://clis-nigerio-api.onrender.com`) |
+
+5. Redeploy after adding the env var
+
+### CORS
+
+The backend reads `FRONTEND_URL` to set the CORS allowed origin. Ensure this matches your Vercel deployment URL exactly (no trailing slash).
 
 ---
 
@@ -374,7 +551,7 @@ cd backend && npm test && cd ../frontend && npm test
 | `docker logs clis_mongo`                               | View MongoDB logs                      |
 | `docker exec -it clis_mongo mongosh -u mongo -p mongo` | Open a MongoDB shell                   |
 
-If the container stops between sessions (e.g. after a machine restart), restart it with:
+If the container stops between sessions (e.g. after a machine restart):
 
 ```bash
 docker compose up -d
