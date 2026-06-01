@@ -50,7 +50,7 @@ export const swaggerSpec: OpenAPIV3.Document = {
   servers: [
     { url: "http://localhost:3001", description: "Local development" },
     {
-      url: "https://<your-backend>.onrender.com",
+      url: "https://clis-nigerio-api.onrender.com",
       description: "Production (Render)",
     },
   ],
